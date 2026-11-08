@@ -3,31 +3,48 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="description" content="Sign in to plan and organize your cosplay projects.">
-    <title>Login | Cosplay Planner</title>
+    <title>Login - Cosplay Planner</title>
     <link rel="stylesheet" href="css/style.css">
-    <link rel="stylesheet" href="css/components.css">
-    <link rel="stylesheet" href="css/auth.css">
+    <style>
+        body { display: flex; justify-content: center; align-items: center; min-height: 100vh; background: linear-gradient(135deg, #FF6B81 0%, #FFA502 100%); }
+        .login-container { background: white; padding: 48px; border-radius: 16px; box-shadow: 0 10px 40px rgba(0, 0, 0, 0.1); width: 100%; max-width: 400px; }
+        .login-header { text-align: center; margin-bottom: 32px; }
+        .login-header h1 { font-size: 32px; color: #FF6B81; margin-bottom: 8px; }
+        .login-header p { color: #747D8C; font-size: 16px; }
+        .form-group { margin-bottom: 20px; }
+        .form-group label { display: block; margin-bottom: 8px; color: #2F3542; font-weight: 500; font-size: 14px; }
+        .form-group input { width: 100%; padding: 12px; border: 2px solid #E8EAF6; border-radius: 8px; font-size: 14px; transition: border-color 0.2s; }
+        .form-group input:focus { outline: none; border-color: #FF6B81; }
+        .btn-login { width: 100%; padding: 14px; background: linear-gradient(135deg, #FF6B81 0%, #FF8E9E 100%); color: white; border: none; border-radius: 8px; font-size: 16px; font-weight: 600; cursor: pointer; transition: transform 0.2s, box-shadow 0.2s; }
+        .btn-login:hover { transform: translateY(-2px); box-shadow: 0 5px 20px rgba(255, 107, 129, 0.4); }
+        .login-footer { text-align: center; margin-top: 24px; color: #747D8C; font-size: 14px; }
+        .login-footer a { color: #FF6B81; font-weight: 600; }
+        .message { margin-top: 16px; padding: 12px; border-radius: 8px; text-align: center; font-size: 14px; display: none; }
+        .message.success { background-color: #d4edda; color: #155724; display: block; }
+        .message.error { background-color: #f8d7da; color: #721c24; display: block; }
+    </style>
 </head>
 <body>
-    <main class="container">
-        <section class="form-box">
-            <h1>Cosplay Planner</h1>
-            <h2>Login</h2>
-            <form id="loginForm">
-                <div class="input-group">
-                    <label for="loginEmail">Email</label>
-                    <input type="email" id="loginEmail" required placeholder="Enter your email">
-                </div>
-                <div class="input-group">
-                    <label for="loginPassword">Password</label>
-                    <input type="password" id="loginPassword" required placeholder="Enter your password">
-                </div>
-                <button type="submit" class="btn">Login</button>
-            </form>
-            <div id="loginMessage" class="message" aria-live="polite"></div>
-            <p class="switch-form">Don't have an account? <a href="pages/register.html">Register here</a></p>
-        </section>
+    <main class="login-container">
+        <div class="login-header">
+            <h1>✨ CraftCon</h1>
+            <p>Plan your next cosplay masterpiece</p>
+        </div>
+        <form id="loginForm">
+            <div class="form-group">
+                <label for="loginEmail">Email</label>
+                <input type="email" id="loginEmail" required placeholder="Enter your email">
+            </div>
+            <div class="form-group">
+                <label for="loginPassword">Password</label>
+                <input type="password" id="loginPassword" required placeholder="Enter your password">
+            </div>
+            <button type="submit" class="btn-login">Login</button>
+        </form>
+        <div id="loginMessage" class="message" aria-live="polite"></div>
+        <div class="login-footer">
+            Don't have an account? <a href="pages/register.html">Register here</a>
+        </div>
     </main>
     <script src="js/auth.js"></script>
 </body>

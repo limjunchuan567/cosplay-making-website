@@ -4,31 +4,24 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Dashboard - Cosplay Planner</title>
-    <!-- Make sure these paths match your folder structure -->
     <link rel="stylesheet" href="../css/style.css">
     <link rel="stylesheet" href="../css/components.css">
     <link rel="stylesheet" href="../css/dashboard.css">
 </head>
 <body>
-    <!-- Navigation Bar -->
     <nav class="navbar">
         <div class="container">
-            <a href="dashboard.html" class="navbar-brand">
-                ✨ CraftCon
-            </a>
+            <a href="dashboard.html" class="navbar-brand">✨ CraftCon</a>
             <ul class="navbar-menu">
                 <li><a href="dashboard.html" class="active">Dashboard</a></li>
                 <li><a href="#">My Projects</a></li>
                 <li><a href="#">Materials</a></li>
                 <li><a href="#">Settings</a></li>
-                <li><a href="../index.html">Logout</a></li>
+                <li><button class="btn btn-small" id="logoutButton" type="button">Logout</button></li>
             </ul>
         </div>
     </nav>
-
-    <!-- Main Content -->
     <main class="container">
-        <!-- Hero/Welcome Section -->
         <section class="dashboard-hero">
             <h1>👋 Welcome back!</h1>
             <p>What are we crafting today?</p>
@@ -37,9 +30,52 @@
                 <a href="#" class="btn">📚 Open Material Library</a>
             </div>
         </section>
-
-        <!-- Active Projects Section -->
         <section class="mb-lg">
             <div class="section-header">
                 <h2 class="section-title">📂 Active Projects</h2>
-                <a href="#" class="btn btn-secondary btn-small" id="viewAllBtn" style="display: none;">View All
+                <a href="#" class="btn btn-secondary btn-small" id="viewAllBtn" hidden>View All</a>
+            </div>
+            <div id="projectsContainer">
+                <div id="emptyState" class="empty-state">
+                    <div class="empty-state-icon">🎭</div>
+                    <h3 class="empty-state-title">No projects yet!</h3>
+                    <p class="empty-state-text">Ready to start your next cosplay adventure?<br>Create your first project and let the crafting begin!</p>
+                    <a href="project-new.html" class="btn btn-primary">✨ Create Your First Project</a>
+                </div>
+                <div id="projectsGrid" class="grid-2" hidden></div>
+            </div>
+        </section>
+        <section class="mb-lg">
+            <h2 class="section-title mb-md">⚡ Quick Actions &amp; Tools</h2>
+            <div class="grid-3">
+                <div class="card quick-action-card">
+                    <div class="quick-action-icon">🎨</div>
+                    <h3 class="quick-action-title">Color Palette Tool</h3>
+                    <p style="color: var(--text-light); font-size: 14px; margin-top: 8px;">Plan your color schemes</p>
+                </div>
+                <div class="card quick-action-card">
+                    <div class="quick-action-icon">📏</div>
+                    <h3 class="quick-action-title">Measurement Tracker</h3>
+                    <p style="color: var(--text-light); font-size: 14px; margin-top: 8px;">Store your body measurements</p>
+                </div>
+                <div class="card quick-action-card">
+                    <div class="quick-action-icon">🛒</div>
+                    <h3 class="quick-action-title">Shopping List</h3>
+                    <p style="color: var(--text-light); font-size: 14px; margin-top: 8px;">Track materials to buy</p>
+                </div>
+            </div>
+        </section>
+        <section class="mb-lg">
+            <h2 class="section-title mb-md">📌 Quick Notes &amp; Brainstorm</h2>
+            <div class="notes-box">
+                <strong>💡 Idea:</strong> "Remember: The blue fabric needs to be 4-way stretch for the bodysuit. Check 'FabricStoreX' for alternatives."
+            </div>
+        </section>
+    </main>
+    <footer class="footer">
+        <div class="container"><p>CraftCon © 2026 | Made for creators, by creators ✨</p></div>
+    </footer>
+    <script src="../js/main.js"></script>
+    <script src="../js/dashboard.js"></script>
+</body>
+</html>
