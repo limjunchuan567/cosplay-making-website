@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard - Cosplay Planner</title>
+    <!-- Make sure these paths match your folder structure -->
+    <link rel="stylesheet" href="../css/style.css">
+    <link rel="stylesheet" href="../css/components.css">
+    <link rel="stylesheet" href="../css/dashboard.css">
+</head>
+<body>
+    <!-- Navigation Bar -->
+    <nav class="navbar">
+        <div class="container">
+            <a href="dashboard.html" class="navbar-brand">
+                ✨ CraftCon
+            </a>
+            <ul class="navbar-menu">
+                <li><a href="dashboard.html" class="active">Dashboard</a></li>
+                <li><a href="#">My Projects</a></li>
+                <li><a href="#">Materials</a></li>
+                <li><a href="#">Settings</a></li>
+                <li><a href="../index.html">Logout</a></li>
+            </ul>
+        </div>
+    </nav>
+
+    <!-- Main Content -->
+    <main class="container">
+        <!-- Hero/Welcome Section -->
+        <section class="dashboard-hero">
+            <h1>👋 Welcome back!</h1>
+            <p>What are we crafting today?</p>
+            <div class="hero-actions">
+                <a href="project-new.html" class="btn">✨ Create New Project</a>
+                <a href="#" class="btn">📚 Open Material Library</a>
+            </div>
+        </section>
+
+        <!-- Active Projects Section -->
+        <section class="mb-lg">
+            <div class="section-header">
+                <h2 class="section-title">📂 Active Projects</h2>
+                <a href="#" class="btn btn-secondary btn-small" id="viewAllBtn" style="display: none;">View All
