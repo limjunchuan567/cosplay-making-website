@@ -20,19 +20,11 @@ function showMessage(elementId, message, type) {
 }
 
 function getCurrentUser() {
-    return JSON.parse(localStorage.getItem('currentUser') || 'null');
+    // Auth disabled for now — returns a default guest user
+    return { id: 'guest', name: 'Cosplayer' };
 }
 
 function requireAuth() {
-    const user = getCurrentUser();
-    if (!user) {
-        window.location.replace('../index.html');
-        return null;
-    }
-    return user;
-}
-
-function logout() {
-    localStorage.removeItem('currentUser');
-    window.location.href = '../index.html';
+    // Auth disabled for now — always returns guest user
+    return getCurrentUser();
 }

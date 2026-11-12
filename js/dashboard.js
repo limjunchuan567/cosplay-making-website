@@ -42,16 +42,5 @@ function renderProjects() {
     }
 }
 
-const logoutButton = document.getElementById('logoutButton');
-if (logoutButton) {
-    logoutButton.addEventListener('click', () => {
-        localStorage.removeItem('currentUser');
-        window.location.href = '../index.html';
-    });
-}
-
-if (!localStorage.getItem('currentUser')) {
-    window.location.replace('../index.html');
-} else {
-    document.addEventListener('DOMContentLoaded', renderProjects);
-}
+// Auth guard disabled — login removed for now (Level 2 will add Flask sessions)
+document.addEventListener('DOMContentLoaded', renderProjects);
