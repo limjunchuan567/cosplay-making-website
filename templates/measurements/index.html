@@ -1,0 +1,230 @@
+{% extends "base.html" %}
+{% block title %}Body Measurements & Sizing Profile{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <a href="{{ url_for('index') }}" class="back-link">← Dashboard</a>
+        <h1 class="page-title">📏 Body Measurements Profile</h1>
+        <p class="page-subtitle">Your personal anatomical blueprint. Use these numbers to check sewing patterns, order accurate cosplay sizes, and scale 3D-printed armor or props.</p>
+    </div>
+</div>
+
+<!-- Sizing Intelligence Banner -->
+{% if sizing and sizing.has_data %}
+<div class="card" style="margin-bottom: 28px; background: linear-gradient(135deg, rgba(187, 134, 252, 0.08) 0%, rgba(3, 218, 198, 0.08) 100%); border-color: rgba(187, 134, 252, 0.3);">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; flex-wrap: wrap; gap: 10px;">
+        <h2 style="font-size: 18px; font-weight: 700; color: var(--text-primary); display: flex; align-items: center; gap: 8px;">
+            <span>🤖</span> CosplayHub Sizing Intelligence
+        </h2>
+        <span class="status-badge status-completed">Live Calculation</span>
+    </div>
+    <div class="stats-row" style="margin-bottom: 12px;">
+        <div class="stat-card" style="background: var(--bg-surface);">
+            <div class="stat-number text-purple">{{ sizing.us_size }}</div>
+            <div class="stat-label">Estimated US / Western Size</div>
+        </div>
+        <div class="stat-card" style="background: var(--bg-surface);">
+            <div class="stat-number text-teal">{{ sizing.asian_size }}</div>
+            <div class="stat-label">Taobao / DokiDoki / Miccostumes</div>
+        </div>
+        <div class="stat-card" style="background: var(--bg-surface); min-width: 180px;">
+            <div class="stat-number" style="font-size: 16px; font-weight: 600; color: #f5f5f7; padding-top: 6px;">{{ sizing.wig_fit }}</div>
+            <div class="stat-label">Wig &amp; Helmet Fit</div>
+        </div>
+    </div>
+    <p style="font-size: 13px; color: var(--text-secondary); margin-top: 8px;">
+        💡 <strong>Senior Cosplayer Pro-Tip:</strong> Asian costume manufacturers (Taobao, AliExpress, Miccostumes) cut clothes smaller with less stretch. Always default to the larger size or tailor down rather than up!
+    </p>
+</div>
+{% else %}
+<div class="card" style="margin-bottom: 28px; border-style: dashed; padding: 20px;">
+    <p style="font-size: 14px; color: var(--text-secondary);">
+        💡 Enter your <strong>Chest/Bust</strong>, <strong>Waist</strong>, and <strong>Hips</strong> below to unlock automatic sizing recommendations for Western patterns and Asian cosplay vendors.
+    </p>
+</div>
+{% endif %}
+
+<div class="form-card" style="max-width: 900px;">
+    <form method="POST" action="{{ url_for('measurements.index') }}" id="measurementsForm">
+        
+        <!-- Unit Switcher -->
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; padding-bottom: 16px; border-bottom: 1px solid var(--border-subtle);">
+            <div>
+                <span style="font-size: 14px; font-weight: 600; color: var(--text-primary);">Measurement Units</span>
+                <p style="font-size: 12px; color: var(--text-muted);">Stored uniformly in centimeters in the database</p>
+            </div>
+            <div style="display: flex; gap: 8px;">
+                <label style="cursor: pointer; display: flex; align-items: center; gap: 6px; font-size: 14px; color: var(--text-primary); text-transform: none;">
+                    <input type="radio" name="preferred_unit" value="cm" id="unitCm" {% if not m or m.preferred_unit != 'in' %}checked{% endif %} onchange="switchUnits('cm')">
+                    Centimeters (cm)
+                </label>
+                <label style="cursor: pointer; display: flex; align-items: center; gap: 6px; font-size: 14px; color: var(--text-primary); text-transform: none; margin-left: 12px;">
+                    <input type="radio" name="preferred_unit" value="in" id="unitIn" {% if m and m.preferred_unit == 'in' %}checked{% endif %} onchange="switchUnits('in')">
+                    Inches (in)
+                </label>
+            </div>
+        </div>
+
+        <!-- 1. Height & Overall Frame -->
+        <div class="form-section-title">🧍 Height &amp; Frame</div>
+        <div class="two-col" style="margin-bottom: 20px;">
+            <div class="form-group">
+                <label for="height">Total Height (<span class="unit-label">cm</span>)</label>
+                <input type="number" step="0.1" id="height" name="height" class="form-control" placeholder="e.g. 175" value="{{ m.height_cm if m and m.height_cm else '' }}">
+                <span style="font-size: 11px; color: var(--text-muted);">Used to calculate prop and weapon proportions.</span>
+            </div>
+            <div class="form-group">
+                <label for="shoulder_width">Shoulder Width (<span class="unit-label">cm</span>)</label>
+                <input type="number" step="0.1" id="shoulder_width" name="shoulder_width" class="form-control" placeholder="e.g. 44" value="{{ m.shoulder_width_cm if m and m.shoulder_width_cm else '' }}">
+                <span style="font-size: 11px; color: var(--text-muted);">Tip of left shoulder bone to right shoulder bone across back.</span>
+            </div>
+            <div class="form-group">
+                <label for="torso_length">Torso Length (<span class="unit-label">cm</span>)</label>
+                <input type="number" step="0.1" id="torso_length" name="torso_length" class="form-control" placeholder="e.g. 48" value="{{ m.torso_length_cm if m and m.torso_length_cm else '' }}">
+                <span style="font-size: 11px; color: var(--text-muted);">Base of neck (C7 vertebra) down to natural waistline.</span>
+            </div>
+        </div>
+
+        <div class="form-divider"></div>
+
+        <!-- 2. Head & Neck -->
+        <div class="form-section-title">🪖 Head &amp; Neck (Wigs &amp; Helmets)</div>
+        <div class="two-col" style="margin-bottom: 20px;">
+            <div class="form-group">
+                <label for="head_circumference">Head Circumference (<span class="unit-label">cm</span>)</label>
+                <input type="number" step="0.1" id="head_circumference" name="head_circumference" class="form-control" placeholder="e.g. 56" value="{{ m.head_circumference_cm if m and m.head_circumference_cm else '' }}">
+                <span style="font-size: 11px; color: var(--text-muted);">Around widest point above ears/eyebrows. Critical for 3D helmets &amp; wigs!</span>
+            </div>
+            <div class="form-group">
+                <label for="neck_circumference">Neck Circumference (<span class="unit-label">cm</span>)</label>
+                <input type="number" step="0.1" id="neck_circumference" name="neck_circumference" class="form-control" placeholder="e.g. 38" value="{{ m.neck_circumference_cm if m and m.neck_circumference_cm else '' }}">
+                <span style="font-size: 11px; color: var(--text-muted);">For high collars, gorgets, and chokers.</span>
+            </div>
+        </div>
+
+        <div class="form-divider"></div>
+
+        <!-- 3. Torso & Garments -->
+        <div class="form-section-title">👗 Torso &amp; Core (Pattern Drafting &amp; Sizing)</div>
+        <div class="two-col" style="margin-bottom: 20px;">
+            <div class="form-group">
+                <label for="chest_bust">Chest / Bust (<span class="unit-label">cm</span>)</label>
+                <input type="number" step="0.1" id="chest_bust" name="chest_bust" class="form-control" placeholder="e.g. 96" value="{{ m.chest_bust_cm if m and m.chest_bust_cm else '' }}">
+                <span style="font-size: 11px; color: var(--text-muted);">Fullest part of chest/bust. Wear your intended undergarment/binder!</span>
+            </div>
+            <div class="form-group">
+                <label for="underbust">Underbust (<span class="unit-label">cm</span>)</label>
+                <input type="number" step="0.1" id="underbust" name="underbust" class="form-control" placeholder="e.g. 82" value="{{ m.underbust_cm if m and m.underbust_cm else '' }}">
+                <span style="font-size: 11px; color: var(--text-muted);">Directly under the bust line (for corsets and armor under-plates).</span>
+            </div>
+            <div class="form-group">
+                <label for="waist">Natural Waist (<span class="unit-label">cm</span>)</label>
+                <input type="number" step="0.1" id="waist" name="waist" class="form-control" placeholder="e.g. 78" value="{{ m.waist_cm if m and m.waist_cm else '' }}">
+                <span style="font-size: 11px; color: var(--text-muted);">Narrowest part of torso, usually 2-3 cm above navel.</span>
+            </div>
+            <div class="form-group">
+                <label for="hips">Hips (<span class="unit-label">cm</span>)</label>
+                <input type="number" step="0.1" id="hips" name="hips" class="form-control" placeholder="e.g. 98" value="{{ m.hips_cm if m and m.hips_cm else '' }}">
+                <span style="font-size: 11px; color: var(--text-muted);">Widest part around hips and buttocks with feet together.</span>
+            </div>
+        </div>
+
+        <div class="form-divider"></div>
+
+        <!-- 4. Arms & Gauntlets -->
+        <div class="form-section-title">🦾 Arms &amp; Gauntlets</div>
+        <div class="two-col" style="margin-bottom: 20px;">
+            <div class="form-group">
+                <label for="arm_length">Arm Length (<span class="unit-label">cm</span>)</label>
+                <input type="number" step="0.1" id="arm_length" name="arm_length" class="form-control" placeholder="e.g. 60" value="{{ m.arm_length_cm if m and m.arm_length_cm else '' }}">
+                <span style="font-size: 11px; color: var(--text-muted);">Shoulder point to wrist bone with arm slightly bent.</span>
+            </div>
+            <div class="form-group">
+                <label for="bicep_circumference">Bicep Circumference (<span class="unit-label">cm</span>)</label>
+                <input type="number" step="0.1" id="bicep_circumference" name="bicep_circumference" class="form-control" placeholder="e.g. 30" value="{{ m.bicep_circumference_cm if m and m.bicep_circumference_cm else '' }}">
+                <span style="font-size: 11px; color: var(--text-muted);">Fullest part of upper arm (measure flexed for comfort).</span>
+            </div>
+            <div class="form-group">
+                <label for="wrist_circumference">Wrist Circumference (<span class="unit-label">cm</span>)</label>
+                <input type="number" step="0.1" id="wrist_circumference" name="wrist_circumference" class="form-control" placeholder="e.g. 17" value="{{ m.wrist_circumference_cm if m and m.wrist_circumference_cm else '' }}">
+                <span style="font-size: 11px; color: var(--text-muted);">Around wrist bone (for bracers &amp; gauntlet openings).</span>
+            </div>
+        </div>
+
+        <div class="form-divider"></div>
+
+        <!-- 5. Legs & Footwear -->
+        <div class="form-section-title">🦿 Legs &amp; Footwear</div>
+        <div class="two-col" style="margin-bottom: 20px;">
+            <div class="form-group">
+                <label for="inseam">Inseam (<span class="unit-label">cm</span>)</label>
+                <input type="number" step="0.1" id="inseam" name="inseam" class="form-control" placeholder="e.g. 80" value="{{ m.inseam_cm if m and m.inseam_cm else '' }}">
+                <span style="font-size: 11px; color: var(--text-muted);">From crotch seam down inside leg to floor/ankle.</span>
+            </div>
+            <div class="form-group">
+                <label for="outseam">Outseam (<span class="unit-label">cm</span>)</label>
+                <input type="number" step="0.1" id="outseam" name="outseam" class="form-control" placeholder="e.g. 104" value="{{ m.outseam_cm if m and m.outseam_cm else '' }}">
+                <span style="font-size: 11px; color: var(--text-muted);">From waistband down outside leg to ankle.</span>
+            </div>
+            <div class="form-group">
+                <label for="thigh_circumference">Thigh Circumference (<span class="unit-label">cm</span>)</label>
+                <input type="number" step="0.1" id="thigh_circumference" name="thigh_circumference" class="form-control" placeholder="e.g. 54" value="{{ m.thigh_circumference_cm if m and m.thigh_circumference_cm else '' }}">
+                <span style="font-size: 11px; color: var(--text-muted);">Widest point of upper thigh (for thigh-high boots &amp; cuisses).</span>
+            </div>
+            <div class="form-group">
+                <label for="calf_circumference">Calf Circumference (<span class="unit-label">cm</span>)</label>
+                <input type="number" step="0.1" id="calf_circumference" name="calf_circumference" class="form-control" placeholder="e.g. 37" value="{{ m.calf_circumference_cm if m and m.calf_circumference_cm else '' }}">
+                <span style="font-size: 11px; color: var(--text-muted);">Widest point of calf (critical for boot covers &amp; greaves).</span>
+            </div>
+            <div class="form-group">
+                <label for="shoe_size">Shoe Size</label>
+                <input type="text" id="shoe_size" name="shoe_size" class="form-control" placeholder="e.g. US 9 / EU 42" value="{{ m.shoe_size if m and m.shoe_size else '' }}">
+            </div>
+        </div>
+
+        <div class="form-divider"></div>
+
+        <!-- Notes -->
+        <div class="form-section-title">📝 Fitting Notes</div>
+        <div class="form-group">
+            <textarea id="notes" name="notes" class="form-control form-textarea" placeholder="Specific fit quirks, e.g. 'broad shoulders, prefer looser armholes, wear with 5cm platform inserts'...">{{ m.notes if m and m.notes else '' }}</textarea>
+        </div>
+
+        <div class="form-actions">
+            <a href="{{ url_for('index') }}" class="btn btn-secondary">Cancel</a>
+            <button type="submit" class="btn btn-primary">Save Measurements Profile 📏</button>
+        </div>
+    </form>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+let currentUnit = '{{ m.preferred_unit if m and m.preferred_unit else "cm" }}';
+
+function switchUnits(newUnit) {
+    if (newUnit === currentUnit) return;
+    
+    const inputs = document.querySelectorAll('#measurementsForm input[type="number"]');
+    const labels = document.querySelectorAll('.unit-label');
+    
+    labels.forEach(label => {
+        label.textContent = newUnit;
+    });
+
+    inputs.forEach(input => {
+        if (input.value && !isNaN(input.value)) {
+            const val = parseFloat(input.value);
+            if (newUnit === 'in') {
+                input.value = (val / 2.54).toFixed(1);
+            } else {
+                input.value = (val * 2.54).toFixed(1);
+            }
+        }
+    });
+
+    currentUnit = newUnit;
+}
+</script>
+{% endblock %}

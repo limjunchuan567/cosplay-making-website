@@ -41,6 +41,9 @@ def create_app():
     from materials import bp as materials_bp
     app.register_blueprint(materials_bp)
 
+    from measurements import bp as measurements_bp
+    app.register_blueprint(measurements_bp)
+
     # ── Dashboard ──────────────────────────────────────────────────────────
     @app.route("/")
     @login_required

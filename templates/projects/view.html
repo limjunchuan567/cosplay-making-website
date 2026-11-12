@@ -20,6 +20,7 @@
             {% elif project.status == 'completed' %}✅ Completed
             {% else %}⏸️ On Hold{% endif %}
         </span>
+        <a href="{{ url_for('measurements.index') }}" class="btn btn-secondary btn-sm" title="View your saved body measurements for fitting">📏 Measurements</a>
         <a href="{{ url_for('projects.edit', project_id=project.id) }}" class="btn btn-secondary btn-sm">✏️ Edit</a>
     </div>
 </div>

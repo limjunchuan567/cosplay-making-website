@@ -19,6 +19,7 @@
                 <ul class="nav-links">
                     {% if g.user %}
                         <li><a href="{{ url_for('index') }}">Dashboard</a></li>
+                        <li><a href="{{ url_for('measurements.index') }}">📏 Measurements</a></li>
                         <li><span class="user-badge">👤 {{ g.user['username'] }}</span></li>
                         <li><a href="{{ url_for('auth.logout') }}">Log Out</a></li>
                     {% else %}
