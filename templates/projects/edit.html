@@ -1,0 +1,102 @@
+{% extends "base.html" %}
+{% block title %}Edit — {{ project.character_name or project.name }}{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <a href="{{ url_for('projects.view', project_id=project.id) }}" class="back-link">← Back to Project</a>
+        <h1 class="page-title">Edit Project</h1>
+    </div>
+</div>
+
+<div class="form-card">
+    <form method="POST" action="{{ url_for('projects.edit', project_id=project.id) }}" novalidate>
+
+        <div class="form-section-title">🎭 Character & Source</div>
+        <div class="form-row">
+            <div class="form-group">
+                <label for="name">Project Name <span class="required">*</span></label>
+                <input type="text" id="name" name="name" class="form-control"
+                       value="{{ request.form.get('name', project.name) }}"
+                       maxlength="120" required autofocus>
+            </div>
+        </div>
+        <div class="form-row two-col">
+            <div class="form-group">
+                <label for="character_name">Character Name</label>
+                <input type="text" id="character_name" name="character_name" class="form-control"
+                       value="{{ request.form.get('character_name', project.character_name or '') }}"
+                       maxlength="100">
+            </div>
+            <div class="form-group">
+                <label for="source_series">Source / Series</label>
+                <input type="text" id="source_series" name="source_series" class="form-control"
+                       value="{{ request.form.get('source_series', project.source_series or '') }}"
+                       maxlength="100">
+            </div>
+        </div>
+
+        <div class="form-divider"></div>
+
+        <div class="form-section-title">📊 Status</div>
+        <div class="form-row">
+            <div class="form-group" style="max-width: 240px;">
+                <label for="status">Project Status</label>
+                <select id="status" name="status" class="form-control">
+                    {% for s in ['planning', 'in_progress', 'completed', 'on_hold'] %}
+                    <option value="{{ s }}" {% if (request.form.get('status', project.status)) == s %}selected{% endif %}>
+                        {% if s == 'planning' %}📋 Planning
+                        {% elif s == 'in_progress' %}🔨 In Progress
+                        {% elif s == 'completed' %}✅ Completed
+                        {% else %}⏸️ On Hold{% endif %}
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+        </div>
+
+        <div class="form-divider"></div>
+
+        <div class="form-section-title">🗓️ Convention Target</div>
+        <div class="form-row two-col">
+            <div class="form-group">
+                <label for="convention_name">Convention Name</label>
+                <input type="text" id="convention_name" name="convention_name" class="form-control"
+                       value="{{ request.form.get('convention_name', project.convention_name or '') }}"
+                       maxlength="100">
+            </div>
+            <div class="form-group">
+                <label for="convention_date">Convention Date</label>
+                <input type="date" id="convention_date" name="convention_date" class="form-control"
+                       value="{{ request.form.get('convention_date', project.convention_date or '') }}">
+            </div>
+        </div>
+
+        <div class="form-divider"></div>
+
+        <div class="form-section-title">💰 Budget</div>
+        <div class="form-row">
+            <div class="form-group" style="max-width: 240px;">
+                <label for="budget_limit">Total Budget Limit ($)</label>
+                <input type="number" id="budget_limit" name="budget_limit" class="form-control"
+                       placeholder="0.00" min="0" step="0.01"
+                       value="{{ request.form.get('budget_limit', project.budget_limit or '') }}">
+            </div>
+        </div>
+
+        <div class="form-divider"></div>
+
+        <div class="form-section-title">📝 Notes</div>
+        <div class="form-group">
+            <label for="notes">Notes</label>
+            <textarea id="notes" name="notes" class="form-control form-textarea">{{ request.form.get('notes', project.notes or '') }}</textarea>
+        </div>
+
+        <div class="form-actions">
+            <a href="{{ url_for('projects.view', project_id=project.id) }}" class="btn btn-secondary">Cancel</a>
+            <button type="submit" class="btn btn-primary">Save Changes →</button>
+        </div>
+
+    </form>
+</div>
+{% endblock %}

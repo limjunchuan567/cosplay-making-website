@@ -1,0 +1,240 @@
+{% extends "base.html" %}
+{% block title %}{{ project.character_name or project.name }}{% endblock %}
+
+{% block content %}
+<!-- Back & Header -->
+<div class="page-header">
+    <div>
+        <a href="{{ url_for('index') }}" class="back-link">← Dashboard</a>
+        <h1 class="page-title">{{ project.character_name or project.name }}</h1>
+        {% if project.character_name %}
+            <p class="page-subtitle">{{ project.name }}{% if project.source_series %} · <em>{{ project.source_series }}</em>{% endif %}</p>
+        {% elif project.source_series %}
+            <p class="page-subtitle"><em>{{ project.source_series }}</em></p>
+        {% endif %}
+    </div>
+    <div style="display:flex; gap:10px; align-items:center;">
+        <span class="status-badge status-{{ project.status }}">
+            {% if project.status == 'planning' %}📋 Planning
+            {% elif project.status == 'in_progress' %}🔨 In Progress
+            {% elif project.status == 'completed' %}✅ Completed
+            {% else %}⏸️ On Hold{% endif %}
+        </span>
+        <a href="{{ url_for('projects.edit', project_id=project.id) }}" class="btn btn-secondary btn-sm">Edit</a>
+    </div>
+</div>
+
+<!-- Convention Countdown Banner -->
+{% if days_left is not none %}
+<div class="countdown-banner {% if days_left <= 14 %}countdown-banner-urgent{% endif %}">
+    {% if days_left > 0 %}
+        🗓️ <strong>{{ project.convention_name or 'Convention' }}</strong> in
+        <strong>{{ days_left }} day{{ 's' if days_left != 1 }}</strong>
+        {% if days_left <= 7 %} — Hallway test should be DONE! 🚨{% endif %}
+    {% elif days_left == 0 %}
+        🎉 <strong>It's Con Day!</strong> Go have fun! ✨
+    {% else %}
+        Convention date has passed.
+    {% endif %}
+</div>
+{% endif %}
+
+<!-- Stats Row -->
+<div class="stats-row" style="margin-top: 24px;">
+    <div class="stat-card">
+        <div class="stat-number text-purple">{{ task_done }}/{{ task_total }}</div>
+        <div class="stat-label">Tasks Done</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-number text-teal">${{ "%.2f"|format(budget_actual) }}</div>
+        <div class="stat-label">Spent</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-number" style="color: var(--color-warning)">${{ "%.2f"|format(budget_est) }}</div>
+        <div class="stat-label">Estimated</div>
+    </div>
+    {% if project.budget_limit and project.budget_limit > 0 %}
+    <div class="stat-card">
+        <div class="stat-number" style="color: {% if budget_est > project.budget_limit %}var(--color-error){% else %}#4ade80{% endif %}">
+            ${{ "%.2f"|format(project.budget_limit) }}
+        </div>
+        <div class="stat-label">Budget Limit</div>
+    </div>
+    {% endif %}
+    <div class="stat-card">
+        <div class="stat-number">{{ parts|length }}</div>
+        <div class="stat-label">Parts</div>
+    </div>
+</div>
+
+<!-- Budget Progress Bar -->
+{% if project.budget_limit and project.budget_limit > 0 %}
+<div class="card" style="margin-top: 8px; padding: 16px 24px;">
+    <div style="display:flex; justify-content:space-between; margin-bottom: 8px; font-size: 13px; color: var(--text-secondary);">
+        <span>Budget used</span>
+        <span>${{ "%.2f"|format(budget_est) }} of ${{ "%.2f"|format(project.budget_limit) }}</span>
+    </div>
+    <div class="budget-bar-bg">
+        {% set pct = [((budget_est / project.budget_limit) * 100), 100]|min %}
+        <div class="budget-bar-fill {% if pct > 90 %}budget-over{% endif %}" style="width: {{ pct }}%"></div>
+    </div>
+</div>
+{% endif %}
+
+<!-- Two column layout: Parts + Tasks -->
+<div class="project-cols" style="margin-top: 32px;">
+
+    <!-- LEFT: Costume Parts -->
+    <section class="project-col">
+        <div class="section-header">
+            <h2 class="section-title">🧩 Costume Parts</h2>
+            <span style="font-size: 12px; color: var(--text-muted);">Coming: add parts ↗</span>
+        </div>
+
+        {% if parts %}
+            {% for part in parts %}
+            <div class="part-card">
+                <div class="part-left">
+                    <span class="part-category-icon">
+                        {% if part.category == 'wig' %}💇
+                        {% elif part.category == 'garment' %}👗
+                        {% elif part.category == 'armor' %}🛡️
+                        {% elif part.category == 'prop' %}⚔️
+                        {% elif part.category == 'footwear' %}👢
+                        {% elif part.category == 'electronics' %}💡
+                        {% elif part.category == 'makeup' %}💄
+                        {% else %}🔧{% endif %}
+                    </span>
+                    <div>
+                        <div class="part-name">{{ part.name }}</div>
+                        <div class="part-category">{{ part.category|capitalize }}</div>
+                    </div>
+                </div>
+                <span class="status-badge status-{{ part.status }}">
+                    {% if part.status == 'not_started' %}Not Started
+                    {% elif part.status == 'in_progress' %}In Progress
+                    {% else %}Done{% endif %}
+                </span>
+            </div>
+            {% endfor %}
+        {% else %}
+            <div class="mini-empty">No parts added yet. <span style="color:var(--text-muted);">Parts management coming in Level 5.</span></div>
+        {% endif %}
+    </section>
+
+    <!-- RIGHT: Tasks -->
+    <section class="project-col">
+        <div class="section-header">
+            <h2 class="section-title">✅ Tasks
+                {% if task_total > 0 %}
+                <span style="font-size:14px; font-weight:400; color:var(--text-secondary);">({{ task_done }}/{{ task_total }})</span>
+                {% endif %}
+            </h2>
+        </div>
+
+        {% if tasks %}
+            {% for task in tasks %}
+            <div class="task-row {% if task.status == 'done' %}task-done{% endif %}">
+                <div class="task-left">
+                    <span class="priority-dot priority-{{ task.priority }}"></span>
+                    <span class="task-title">{{ task.title }}</span>
+                    {% if task.part_name %}
+                        <span class="task-part-tag">{{ task.part_name }}</span>
+                    {% endif %}
+                </div>
+                <span class="task-status-badge task-{{ task.status }}">
+                    {% if task.status == 'done' %}✓
+                    {% elif task.status == 'in_progress' %}⟳
+                    {% else %}○{% endif %}
+                </span>
+            </div>
+            {% endfor %}
+        {% else %}
+            <div class="mini-empty">No tasks yet. <span style="color:var(--text-muted);">Task management coming in Level 5.</span></div>
+        {% endif %}
+    </section>
+
+</div>
+
+<!-- Materials / BOM Section -->
+<section style="margin-top: 32px;">
+    <div class="section-header">
+        <h2 class="section-title">🛒 Materials & Budget</h2>
+    </div>
+
+    {% if materials %}
+    <div class="card" style="padding: 0; overflow: hidden;">
+        <table class="materials-table">
+            <thead>
+                <tr>
+                    <th>Item</th>
+                    <th>Category</th>
+                    <th>Qty</th>
+                    <th>Est. Cost</th>
+                    <th>Actual</th>
+                    <th>Status</th>
+                    <th>Stash</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for m in materials %}
+                <tr class="{% if m.in_stash %}row-stash{% endif %}">
+                    <td>
+                        <span class="mat-name">{{ m.item_name }}</span>
+                        {% if m.part_name %}
+                            <span class="task-part-tag">{{ m.part_name }}</span>
+                        {% endif %}
+                    </td>
+                    <td><span class="mat-category">{{ m.category }}</span></td>
+                    <td>{{ m.quantity }} {{ m.unit }}</td>
+                    <td>${{ "%.2f"|format(m.price_est * m.quantity) }}</td>
+                    <td>
+                        {% if m.price_actual %}
+                            ${{ "%.2f"|format(m.price_actual * m.quantity) }}
+                        {% else %}
+                            <span style="color:var(--text-muted);">—</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        <span class="mat-status mat-{{ m.status }}">
+                            {% if m.status == 'needed' %}Needed
+                            {% elif m.status == 'ordered' %}Ordered
+                            {% else %}Acquired{% endif %}
+                        </span>
+                    </td>
+                    <td style="text-align:center;">
+                        {% if m.in_stash %}
+                            <span title="In your stash — no need to buy!" style="color: var(--accent-teal);">🗃️</span>
+                        {% else %}
+                            <span style="color: var(--text-muted);">—</span>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+        <div class="mini-empty">No materials added yet. <span style="color:var(--text-muted);">BOM management coming in Level 5.</span></div>
+    {% endif %}
+</section>
+
+<!-- Notes -->
+{% if project.notes %}
+<section style="margin-top: 32px;">
+    <h2 class="section-title">📝 Notes</h2>
+    <div class="card notes-block">{{ project.notes }}</div>
+</section>
+{% endif %}
+
+<!-- Danger Zone -->
+<section style="margin-top: 48px; border-top: 1px solid var(--border-subtle); padding-top: 32px;">
+    <h2 class="section-title" style="color: var(--color-error);">⚠️ Danger Zone</h2>
+    <form method="POST" action="{{ url_for('projects.delete', project_id=project.id) }}"
+          onsubmit="return confirm('Are you sure you want to permanently delete this project? This cannot be undone.');">
+        <button type="submit" class="btn" style="background: var(--color-error-bg); color: var(--color-error); border: 1px solid var(--color-error);">
+            🗑️ Delete Project
+        </button>
+    </form>
+</section>
+{% endblock %}

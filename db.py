@@ -59,7 +59,7 @@ def init_db():
 def init_db_command():
     """Flask CLI command: flask init-db — initialise / reset the database."""
     init_db()
-    click.echo("✅  Database initialised from schema.sql")
+    click.echo("Database initialised from schema.sql")
 
 
 def init_app(app):

@@ -1,0 +1,83 @@
+{% extends "base.html" %}
+{% block title %}Create Account{% endblock %}
+
+{% block content %}
+<div class="auth-wrapper">
+    <div class="auth-card">
+        <div class="auth-header">
+            <div style="font-size: 48px; margin-bottom: 12px;">✨</div>
+            <h1>Join CosplayHub</h1>
+            <p>Start planning your next cosplay build</p>
+        </div>
+
+        <form method="POST" action="{{ url_for('auth.register') }}" novalidate>
+            <div class="form-group">
+                <label for="username">Username</label>
+                <input
+                    type="text"
+                    id="username"
+                    name="username"
+                    class="form-control"
+                    placeholder="Choose a username"
+                    value="{{ request.form.get('username', '') }}"
+                    autocomplete="username"
+                    minlength="3"
+                    maxlength="40"
+                    required
+                    autofocus
+                >
+            </div>
+
+            <div class="form-group">
+                <label for="email">Email</label>
+                <input
+                    type="email"
+                    id="email"
+                    name="email"
+                    class="form-control"
+                    placeholder="your@email.com"
+                    value="{{ request.form.get('email', '') }}"
+                    autocomplete="email"
+                    required
+                >
+            </div>
+
+            <div class="form-group">
+                <label for="password">Password</label>
+                <input
+                    type="password"
+                    id="password"
+                    name="password"
+                    class="form-control"
+                    placeholder="Minimum 6 characters"
+                    autocomplete="new-password"
+                    minlength="6"
+                    required
+                >
+            </div>
+
+            <div class="form-group">
+                <label for="confirm_password">Confirm Password</label>
+                <input
+                    type="password"
+                    id="confirm_password"
+                    name="confirm_password"
+                    class="form-control"
+                    placeholder="Repeat your password"
+                    autocomplete="new-password"
+                    required
+                >
+            </div>
+
+            <button type="submit" class="btn btn-primary btn-block" style="margin-top: 8px;">
+                Create Account →
+            </button>
+        </form>
+
+        <div class="auth-footer">
+            Already have an account?
+            <a href="{{ url_for('auth.login') }}">Log in here</a>
+        </div>
+    </div>
+</div>
+{% endblock %}

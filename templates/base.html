@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}CosplayHub{% endblock %} — Cosplay Command Center</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/components.css') }}">
+    {% block head %}{% endblock %}
+</head>
+<body>
+    <header class="site-header">
+        <div class="container">
+            <nav class="site-nav">
+                <a href="{{ url_for('index') }}" class="brand">
+                    <span class="brand-icon">🧵</span>
+                    <span class="brand-text">CosplayHub</span>
+                </a>
+                <ul class="nav-links">
+                    {% if g.user %}
+                        <li><a href="{{ url_for('index') }}">Dashboard</a></li>
+                        <li><span class="user-badge">👤 {{ g.user['username'] }}</span></li>
+                        <li><a href="{{ url_for('auth.logout') }}">Log Out</a></li>
+                    {% else %}
+                        <li><a href="{{ url_for('auth.login') }}">Log In</a></li>
+                        <li><a href="{{ url_for('auth.register') }}" class="btn btn-primary btn-sm">Sign Up</a></li>
+                    {% endif %}
+                </ul>
+            </nav>
+        </div>
+    </header>
+
+    <main class="main-content">
+        <div class="container">
+            {% with messages = get_flashed_messages(with_categories=true) %}
+                {% if messages %}
+                    <div class="flash-container">
+                        {% for category, message in messages %}
+                            <div class="flash-message flash-{{ category }}">
+                                {% if category == 'success' %}✨
+                                {% elif category == 'error' %}⚠️
+                                {% elif category == 'warning' %}🔔
+                                {% else %}ℹ️{% endif %}
+                                {{ message }}
+                            </div>
+                        {% endfor %}
+                    </div>
+                {% endif %}
+            {% endwith %}
+
+            {% block content %}{% endblock %}
+        </div>
+    </main>
+
+    <footer class="site-footer">
+        <div class="container">
+            <p>CosplayHub &copy; 2026 &mdash; Built for creators, crafters &amp; cosplayers.</p>
+        </div>
+    </footer>
+
+    {% block scripts %}{% endblock %}
+</body>
+</html>

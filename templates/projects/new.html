@@ -1,0 +1,89 @@
+{% extends "base.html" %}
+{% block title %}New Project{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <a href="{{ url_for('index') }}" class="back-link">← Dashboard</a>
+        <h1 class="page-title">New Cosplay Project</h1>
+        <p class="page-subtitle">Fill in the details to start your build plan.</p>
+    </div>
+</div>
+
+<div class="form-card">
+    <form method="POST" action="{{ url_for('projects.new') }}" novalidate>
+
+        <div class="form-section-title">🎭 Character & Source</div>
+        <div class="form-row">
+            <div class="form-group">
+                <label for="name">Project Name <span class="required">*</span></label>
+                <input type="text" id="name" name="name" class="form-control"
+                       placeholder="e.g. David Martinez Full Build"
+                       value="{{ request.form.get('name', '') }}"
+                       maxlength="120" required autofocus>
+            </div>
+        </div>
+        <div class="form-row two-col">
+            <div class="form-group">
+                <label for="character_name">Character Name</label>
+                <input type="text" id="character_name" name="character_name" class="form-control"
+                       placeholder="e.g. David Martinez"
+                       value="{{ request.form.get('character_name', '') }}"
+                       maxlength="100">
+            </div>
+            <div class="form-group">
+                <label for="source_series">Source / Series</label>
+                <input type="text" id="source_series" name="source_series" class="form-control"
+                       placeholder="e.g. Cyberpunk: Edgerunners"
+                       value="{{ request.form.get('source_series', '') }}"
+                       maxlength="100">
+            </div>
+        </div>
+
+        <div class="form-divider"></div>
+
+        <div class="form-section-title">🗓️ Convention Target</div>
+        <div class="form-row two-col">
+            <div class="form-group">
+                <label for="convention_name">Convention Name</label>
+                <input type="text" id="convention_name" name="convention_name" class="form-control"
+                       placeholder="e.g. AnimeFest 2027"
+                       value="{{ request.form.get('convention_name', '') }}"
+                       maxlength="100">
+            </div>
+            <div class="form-group">
+                <label for="convention_date">Convention Date</label>
+                <input type="date" id="convention_date" name="convention_date" class="form-control"
+                       value="{{ request.form.get('convention_date', '') }}">
+            </div>
+        </div>
+
+        <div class="form-divider"></div>
+
+        <div class="form-section-title">💰 Budget</div>
+        <div class="form-row">
+            <div class="form-group" style="max-width: 240px;">
+                <label for="budget_limit">Total Budget Limit ($)</label>
+                <input type="number" id="budget_limit" name="budget_limit" class="form-control"
+                       placeholder="0.00" min="0" step="0.01"
+                       value="{{ request.form.get('budget_limit', '') }}">
+            </div>
+        </div>
+
+        <div class="form-divider"></div>
+
+        <div class="form-section-title">📝 Notes</div>
+        <div class="form-group">
+            <label for="notes">Initial Notes / Ideas</label>
+            <textarea id="notes" name="notes" class="form-control form-textarea"
+                      placeholder="Reference links, build ideas, things to remember...">{{ request.form.get('notes', '') }}</textarea>
+        </div>
+
+        <div class="form-actions">
+            <a href="{{ url_for('index') }}" class="btn btn-secondary">Cancel</a>
+            <button type="submit" class="btn btn-primary">Create Project →</button>
+        </div>
+
+    </form>
+</div>
+{% endblock %}
