@@ -18,6 +18,8 @@ venv/
 .venv/
 env/
 .env/
+.env
+.env.local
 
 # Flask instance folder (contains the SQLite .db file and secret configs)
 instance/
@@ -31,6 +33,15 @@ Thumbs.db
 .idea/
 *.suo
 *.user
+*.swp
+*.swo
+
+# Logs
+*.log
+npm-debug.log*
+
+# Node (legacy prototype)
+node_modules/
 
 # Uploads (user-generated content — not committed)
 static/uploads/*

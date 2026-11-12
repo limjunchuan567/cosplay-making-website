@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>New Project | Cosplay Planner</title>
+    <link rel="stylesheet" href="../css/style.css">
+    <link rel="stylesheet" href="../css/components.css">
+</head>
+<body>
+    <main class="page-shell">
+        <nav class="site-nav">
+            <h1>New cosplay project</h1>
+            <a href="dashboard.html">Back to dashboard</a>
+        </nav>
+        <form class="card" id="projectForm">
+            <div class="form-field">
+                <label for="projectName">Project name</label>
+                <input id="projectName" name="name" required maxlength="100">
+            </div>
+            <div class="form-field">
+                <label for="projectCharacter">Character</label>
+                <input id="projectCharacter" name="character" maxlength="100">
+            </div>
+            <div class="form-field">
+                <label for="projectNotes">Notes</label>
+                <textarea id="projectNotes" name="notes"></textarea>
+            </div>
+            <button class="btn" type="submit">Save project</button>
+        </form>
+    </main>
+    <script src="../js/main.js"></script>
+    <script src="../js/project.js"></script>
+</body>
+</html>

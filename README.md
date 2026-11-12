@@ -3,6 +3,9 @@
 A personal **Cosplay Command Centre** web app built with Flask + SQLite.  
 Plan, track, and budget your cosplay builds from idea to convention floor.
 
+> **Previously:** This repo started as *CraftCon*, a static HTML/JS/localStorage prototype.  
+> It has since been rebuilt as a full-stack Flask + SQLite app under the name **CosplayHub**.
+
 ## Features (Planned)
 - 🔐 Secure account registration & login (Werkzeug password hashing)
 - 📂 Project dashboard with status overview
