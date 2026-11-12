@@ -1,0 +1,37 @@
+# ============================================================
+# CosplayHub — .gitignore
+# ============================================================
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.egg-info/
+dist/
+build/
+.eggs/
+*.egg
+
+# Virtual environments
+venv/
+.venv/
+env/
+.env/
+
+# Flask instance folder (contains the SQLite .db file and secret configs)
+instance/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE / Editor
+.vscode/
+.idea/
+*.suo
+*.user
+
+# Uploads (user-generated content — not committed)
+static/uploads/*
+!static/uploads/.gitkeep
