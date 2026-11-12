@@ -480,3 +480,82 @@ select.form-control {
     padding-top: 24px;
     border-top: 1px solid var(--border-subtle);
 }
+/* ============================================================
+   Level 5 — Interactive panel styles
+   (appended to components.css)
+   ============================================================ */
+
+/* ── Add Panel (expandable <details>) ───────────────────── */
+.add-panel {
+    margin-top: 12px;
+    border: 1px dashed var(--border-hover);
+    border-radius: var(--radius-md);
+    overflow: hidden;
+}
+
+.add-panel summary {
+    padding: 10px 14px;
+    cursor: pointer;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--accent-purple);
+    list-style: none;
+    user-select: none;
+    transition: var(--transition);
+}
+
+.add-panel summary:hover { background: var(--bg-surface-hover); }
+
+.add-panel[open] summary {
+    border-bottom: 1px dashed var(--border-hover);
+    background: var(--bg-surface-hover);
+}
+
+/* ── Inline Form (inside add panels) ────────────────────── */
+.inline-form {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding: 14px;
+}
+
+.inline-form .form-control {
+    font-size: 13px;
+    padding: 9px 12px;
+}
+
+/* ── Materials add form grid ─────────────────────────────── */
+.mat-form-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+}
+
+@media (max-width: 600px) {
+    .mat-form-grid { grid-template-columns: 1fr; }
+}
+
+.mat-form-grid .form-group { margin-bottom: 0; }
+.mat-form-grid label {
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--text-muted);
+    margin-bottom: 5px;
+    display: block;
+}
+
+/* ── Task check button ───────────────────────────────────── */
+.task-check {
+    background: none;
+    border: none;
+    cursor: pointer;
+    font-size: 16px;
+    padding: 0;
+    line-height: 1;
+    flex-shrink: 0;
+    transition: transform 0.15s;
+}
+
+.task-check:hover { transform: scale(1.2); }

@@ -2,7 +2,7 @@
 {% block title %}{{ project.character_name or project.name }}{% endblock %}
 
 {% block content %}
-<!-- Back & Header -->
+<!-- Header -->
 <div class="page-header">
     <div>
         <a href="{{ url_for('index') }}" class="back-link">← Dashboard</a>
@@ -13,24 +13,25 @@
             <p class="page-subtitle"><em>{{ project.source_series }}</em></p>
         {% endif %}
     </div>
-    <div style="display:flex; gap:10px; align-items:center;">
+    <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
         <span class="status-badge status-{{ project.status }}">
             {% if project.status == 'planning' %}📋 Planning
             {% elif project.status == 'in_progress' %}🔨 In Progress
             {% elif project.status == 'completed' %}✅ Completed
             {% else %}⏸️ On Hold{% endif %}
         </span>
-        <a href="{{ url_for('projects.edit', project_id=project.id) }}" class="btn btn-secondary btn-sm">Edit</a>
+        <a href="{{ url_for('projects.edit', project_id=project.id) }}" class="btn btn-secondary btn-sm">✏️ Edit</a>
     </div>
 </div>
 
 <!-- Convention Countdown Banner -->
 {% if days_left is not none %}
-<div class="countdown-banner {% if days_left <= 14 %}countdown-banner-urgent{% endif %}">
+<div class="countdown-banner {% if days_left <= 14 and days_left >= 0 %}countdown-banner-urgent{% endif %}" style="margin-bottom:24px;">
     {% if days_left > 0 %}
         🗓️ <strong>{{ project.convention_name or 'Convention' }}</strong> in
         <strong>{{ days_left }} day{{ 's' if days_left != 1 }}</strong>
-        {% if days_left <= 7 %} — Hallway test should be DONE! 🚨{% endif %}
+        {% if days_left <= 7 %} — Hallway test should be DONE! 🚨
+        {% elif days_left <= 14 %} — Final stretch! 🔥{% endif %}
     {% elif days_left == 0 %}
         🎉 <strong>It's Con Day!</strong> Go have fun! ✨
     {% else %}
@@ -39,8 +40,8 @@
 </div>
 {% endif %}
 
-<!-- Stats Row -->
-<div class="stats-row" style="margin-top: 24px;">
+<!-- Stats -->
+<div class="stats-row">
     <div class="stat-card">
         <div class="stat-number text-purple">{{ task_done }}/{{ task_total }}</div>
         <div class="stat-label">Tasks Done</div>
@@ -50,12 +51,12 @@
         <div class="stat-label">Spent</div>
     </div>
     <div class="stat-card">
-        <div class="stat-number" style="color: var(--color-warning)">${{ "%.2f"|format(budget_est) }}</div>
+        <div class="stat-number" style="color:var(--color-warning)">${{ "%.2f"|format(budget_est) }}</div>
         <div class="stat-label">Estimated</div>
     </div>
     {% if project.budget_limit and project.budget_limit > 0 %}
     <div class="stat-card">
-        <div class="stat-number" style="color: {% if budget_est > project.budget_limit %}var(--color-error){% else %}#4ade80{% endif %}">
+        <div class="stat-number" style="color:{% if budget_est > project.budget_limit %}var(--color-error){% else %}#4ade80{% endif %}">
             ${{ "%.2f"|format(project.budget_limit) }}
         </div>
         <div class="stat-label">Budget Limit</div>
@@ -65,64 +66,92 @@
         <div class="stat-number">{{ parts|length }}</div>
         <div class="stat-label">Parts</div>
     </div>
+    <div class="stat-card">
+        <div class="stat-number">{{ materials|selectattr('in_stash','equalto',1)|list|length }}</div>
+        <div class="stat-label">In Stash</div>
+    </div>
 </div>
 
-<!-- Budget Progress Bar -->
+<!-- Budget Bar -->
 {% if project.budget_limit and project.budget_limit > 0 %}
-<div class="card" style="margin-top: 8px; padding: 16px 24px;">
-    <div style="display:flex; justify-content:space-between; margin-bottom: 8px; font-size: 13px; color: var(--text-secondary);">
-        <span>Budget used</span>
-        <span>${{ "%.2f"|format(budget_est) }} of ${{ "%.2f"|format(project.budget_limit) }}</span>
+<div class="card" style="padding:14px 20px; margin-bottom:28px;">
+    <div style="display:flex; justify-content:space-between; margin-bottom:8px; font-size:13px; color:var(--text-secondary);">
+        <span>Budget used (estimated)</span>
+        <span>${{ "%.2f"|format(budget_est) }} / ${{ "%.2f"|format(project.budget_limit) }}</span>
     </div>
     <div class="budget-bar-bg">
         {% set pct = [((budget_est / project.budget_limit) * 100), 100]|min %}
-        <div class="budget-bar-fill {% if pct > 90 %}budget-over{% endif %}" style="width: {{ pct }}%"></div>
+        <div class="budget-bar-fill {% if pct > 90 %}budget-over{% endif %}" style="width:{{ pct }}%"></div>
     </div>
 </div>
 {% endif %}
 
-<!-- Two column layout: Parts + Tasks -->
-<div class="project-cols" style="margin-top: 32px;">
+<!-- ══════════════════════════════════════════════════════════
+     TWO-COLUMN: Parts  |  Tasks
+══════════════════════════════════════════════════════════ -->
+<div class="project-cols" style="margin-bottom:32px;">
 
-    <!-- LEFT: Costume Parts -->
+    <!-- ── Costume Parts ──────────────────────────────────── -->
     <section class="project-col">
         <div class="section-header">
             <h2 class="section-title">🧩 Costume Parts</h2>
-            <span style="font-size: 12px; color: var(--text-muted);">Coming: add parts ↗</span>
         </div>
 
-        {% if parts %}
-            {% for part in parts %}
-            <div class="part-card">
-                <div class="part-left">
-                    <span class="part-category-icon">
-                        {% if part.category == 'wig' %}💇
-                        {% elif part.category == 'garment' %}👗
-                        {% elif part.category == 'armor' %}🛡️
-                        {% elif part.category == 'prop' %}⚔️
-                        {% elif part.category == 'footwear' %}👢
-                        {% elif part.category == 'electronics' %}💡
-                        {% elif part.category == 'makeup' %}💄
-                        {% else %}🔧{% endif %}
-                    </span>
-                    <div>
-                        <div class="part-name">{{ part.name }}</div>
-                        <div class="part-category">{{ part.category|capitalize }}</div>
-                    </div>
-                </div>
-                <span class="status-badge status-{{ part.status }}">
-                    {% if part.status == 'not_started' %}Not Started
-                    {% elif part.status == 'in_progress' %}In Progress
-                    {% else %}Done{% endif %}
+        {% for part in parts %}
+        <div class="part-card" id="part-{{ part.id }}">
+            <div class="part-left">
+                <span class="part-category-icon">
+                    {% if part.category=='wig' %}💇
+                    {% elif part.category=='garment' %}👗
+                    {% elif part.category=='armor' %}🛡️
+                    {% elif part.category=='prop' %}⚔️
+                    {% elif part.category=='footwear' %}👢
+                    {% elif part.category=='electronics' %}💡
+                    {% elif part.category=='makeup' %}💄
+                    {% else %}🔧{% endif %}
                 </span>
+                <div>
+                    <div class="part-name">{{ part.name }}</div>
+                    <div class="part-category">{{ part.category|capitalize }}</div>
+                </div>
             </div>
-            {% endfor %}
-        {% else %}
-            <div class="mini-empty">No parts added yet. <span style="color:var(--text-muted);">Parts management coming in Level 5.</span></div>
-        {% endif %}
+            <div style="display:flex; gap:6px; align-items:center;">
+                <!-- Quick status cycle -->
+                <form method="POST" action="{{ url_for('parts.edit', project_id=project.id, part_id=part.id) }}">
+                    <input type="hidden" name="part_name" value="{{ part.name }}">
+                    <input type="hidden" name="part_category" value="{{ part.category }}">
+                    <input type="hidden" name="part_status" value="{% if part.status=='not_started' %}in_progress{% elif part.status=='in_progress' %}completed{% else %}not_started{% endif %}">
+                    <button type="submit" class="status-badge status-{{ part.status }}" style="cursor:pointer; border:none; font-size:11px;" title="Click to advance status">
+                        {% if part.status=='not_started' %}Not Started
+                        {% elif part.status=='in_progress' %}In Progress
+                        {% else %}Done ✓{% endif %}
+                    </button>
+                </form>
+                <!-- Delete -->
+                <form method="POST" action="{{ url_for('parts.delete', project_id=project.id, part_id=part.id) }}"
+                      onsubmit="return confirm('Delete part {{ part.name }}? Tasks/materials linked to it will also be unlinked.');">
+                    <button type="submit" class="btn btn-sm" style="background:transparent; color:var(--text-muted); padding:4px 6px;" title="Delete part">✕</button>
+                </form>
+            </div>
+        </div>
+        {% endfor %}
+
+        <!-- Add Part Form -->
+        <details class="add-panel" {% if not parts %}open{% endif %}>
+            <summary>＋ Add Part</summary>
+            <form method="POST" action="{{ url_for('parts.add', project_id=project.id) }}" class="inline-form">
+                <input type="text" name="part_name" class="form-control" placeholder="Part name" required>
+                <select name="part_category" class="form-control">
+                    {% for cat in ['wig','garment','armor','prop','footwear','accessory','makeup','electronics','other'] %}
+                    <option value="{{ cat }}">{{ cat|capitalize }}</option>
+                    {% endfor %}
+                </select>
+                <button type="submit" class="btn btn-primary btn-sm">Add</button>
+            </form>
+        </details>
     </section>
 
-    <!-- RIGHT: Tasks -->
+    <!-- ── Tasks ──────────────────────────────────────────── -->
     <section class="project-col">
         <div class="section-header">
             <h2 class="section-title">✅ Tasks
@@ -132,107 +161,203 @@
             </h2>
         </div>
 
-        {% if tasks %}
-            {% for task in tasks %}
-            <div class="task-row {% if task.status == 'done' %}task-done{% endif %}">
-                <div class="task-left">
-                    <span class="priority-dot priority-{{ task.priority }}"></span>
-                    <span class="task-title">{{ task.title }}</span>
-                    {% if task.part_name %}
-                        <span class="task-part-tag">{{ task.part_name }}</span>
-                    {% endif %}
-                </div>
-                <span class="task-status-badge task-{{ task.status }}">
-                    {% if task.status == 'done' %}✓
-                    {% elif task.status == 'in_progress' %}⟳
-                    {% else %}○{% endif %}
-                </span>
-            </div>
-            {% endfor %}
-        {% else %}
-            <div class="mini-empty">No tasks yet. <span style="color:var(--text-muted);">Task management coming in Level 5.</span></div>
+        <!-- Task progress bar -->
+        {% if task_total > 0 %}
+        <div class="budget-bar-bg" style="margin-bottom:16px;">
+            <div class="budget-bar-fill" style="width:{{ ((task_done / task_total) * 100)|int }}%"></div>
+        </div>
         {% endif %}
+
+        {% for task in tasks %}
+        <div class="task-row {% if task.status=='done' %}task-done{% endif %}">
+            <div class="task-left">
+                <!-- Status toggle -->
+                <form method="POST" action="{{ url_for('tasks.toggle_status', project_id=project.id, task_id=task.id) }}" style="display:contents;">
+                    <input type="hidden" name="status" value="{% if task.status=='done' %}todo{% else %}done{% endif %}">
+                    <button type="submit" class="task-check" title="Toggle done">
+                        {% if task.status=='done' %}✅{% else %}⬜{% endif %}
+                    </button>
+                </form>
+                <span class="priority-dot priority-{{ task.priority }}" title="{{ task.priority }} priority"></span>
+                <span class="task-title">{{ task.title }}</span>
+                {% if task.part_name %}<span class="task-part-tag">{{ task.part_name }}</span>{% endif %}
+                {% if task.due_date %}<span style="font-size:11px; color:var(--text-muted);">📅 {{ task.due_date }}</span>{% endif %}
+            </div>
+            <form method="POST" action="{{ url_for('tasks.delete', project_id=project.id, task_id=task.id) }}"
+                  onsubmit="return confirm('Delete task?');">
+                <button type="submit" class="btn btn-sm" style="background:transparent; color:var(--text-muted); padding:4px 6px;">✕</button>
+            </form>
+        </div>
+        {% endfor %}
+
+        {% if not tasks %}
+        <div class="mini-empty" style="margin-bottom:12px;">No tasks yet — add one below.</div>
+        {% endif %}
+
+        <!-- Add Task Form -->
+        <details class="add-panel" {% if not tasks %}open{% endif %}>
+            <summary>＋ Add Task</summary>
+            <form method="POST" action="{{ url_for('tasks.add', project_id=project.id) }}" class="inline-form">
+                <input type="text" name="task_title" class="form-control" placeholder="Task title" required>
+                <select name="task_part_id" class="form-control">
+                    <option value="">— No specific part —</option>
+                    {% for part in parts %}
+                    <option value="{{ part.id }}">{{ part.name }}</option>
+                    {% endfor %}
+                </select>
+                <select name="task_priority" class="form-control">
+                    <option value="low">Low</option>
+                    <option value="medium" selected>Medium</option>
+                    <option value="high">High</option>
+                    <option value="critical">Critical 🚨</option>
+                </select>
+                <input type="date" name="task_due_date" class="form-control" placeholder="Due date (optional)">
+                <button type="submit" class="btn btn-primary btn-sm">Add Task</button>
+            </form>
+        </details>
     </section>
 
 </div>
 
-<!-- Materials / BOM Section -->
-<section style="margin-top: 32px;">
+<!-- ══════════════════════════════════════════════════════════
+     MATERIALS / SMART BOM
+══════════════════════════════════════════════════════════ -->
+<section style="margin-bottom:32px;">
     <div class="section-header">
         <h2 class="section-title">🛒 Materials & Budget</h2>
+        <span style="font-size:13px; color:var(--text-secondary);">
+            {{ materials|selectattr('in_stash','equalto',0)|selectattr('status','equalto','needed')|list|length }} item(s) still needed
+        </span>
     </div>
 
     {% if materials %}
-    <div class="card" style="padding: 0; overflow: hidden;">
+    <div class="card" style="padding:0; overflow:hidden; margin-bottom:16px;">
         <table class="materials-table">
             <thead>
                 <tr>
                     <th>Item</th>
                     <th>Category</th>
                     <th>Qty</th>
-                    <th>Est. Cost</th>
+                    <th>Est. Total</th>
                     <th>Actual</th>
                     <th>Status</th>
                     <th>Stash</th>
+                    <th></th>
                 </tr>
             </thead>
             <tbody>
                 {% for m in materials %}
                 <tr class="{% if m.in_stash %}row-stash{% endif %}">
                     <td>
-                        <span class="mat-name">{{ m.item_name }}</span>
-                        {% if m.part_name %}
-                            <span class="task-part-tag">{{ m.part_name }}</span>
-                        {% endif %}
+                        <div class="mat-name">{{ m.item_name }}</div>
+                        {% if m.part_name %}<span class="task-part-tag">{{ m.part_name }}</span>{% endif %}
+                        {% if m.vendor_url %}<a href="{{ m.vendor_url }}" target="_blank" rel="noopener" style="font-size:11px; display:block; margin-top:2px; color:var(--accent-teal);">🔗 Link</a>{% endif %}
                     </td>
                     <td><span class="mat-category">{{ m.category }}</span></td>
                     <td>{{ m.quantity }} {{ m.unit }}</td>
                     <td>${{ "%.2f"|format(m.price_est * m.quantity) }}</td>
-                    <td>
-                        {% if m.price_actual %}
-                            ${{ "%.2f"|format(m.price_actual * m.quantity) }}
-                        {% else %}
-                            <span style="color:var(--text-muted);">—</span>
-                        {% endif %}
-                    </td>
+                    <td>{% if m.price_actual is not none and m.price_actual != '' %}${{ "%.2f"|format(m.price_actual * m.quantity) }}{% else %}<span style="color:var(--text-muted);">—</span>{% endif %}</td>
                     <td>
                         <span class="mat-status mat-{{ m.status }}">
-                            {% if m.status == 'needed' %}Needed
-                            {% elif m.status == 'ordered' %}Ordered
-                            {% else %}Acquired{% endif %}
+                            {% if m.status=='needed' %}🔴 Needed
+                            {% elif m.status=='ordered' %}🟡 Ordered
+                            {% else %}🟢 Acquired{% endif %}
                         </span>
                     </td>
-                    <td style="text-align:center;">
-                        {% if m.in_stash %}
-                            <span title="In your stash — no need to buy!" style="color: var(--accent-teal);">🗃️</span>
-                        {% else %}
-                            <span style="color: var(--text-muted);">—</span>
-                        {% endif %}
+                    <td style="text-align:center;">{% if m.in_stash %}<span title="In your stash">🗃️</span>{% else %}—{% endif %}</td>
+                    <td>
+                        <form method="POST" action="{{ url_for('materials.delete', project_id=project.id, mat_id=m.id) }}"
+                              onsubmit="return confirm('Remove {{ m.item_name }}?');">
+                            <button type="submit" class="btn btn-sm" style="background:transparent; color:var(--text-muted); padding:4px 8px;">✕</button>
+                        </form>
                     </td>
                 </tr>
                 {% endfor %}
             </tbody>
+            <tfoot>
+                <tr>
+                    <td colspan="3" style="padding:10px 16px; color:var(--text-secondary); font-size:13px; font-weight:600;">Total (excl. stash)</td>
+                    <td style="padding:10px 16px; font-weight:700; color:var(--accent-purple);">${{ "%.2f"|format(budget_est) }}</td>
+                    <td style="padding:10px 16px; font-weight:700; color:var(--accent-teal);">${{ "%.2f"|format(budget_actual) }}</td>
+                    <td colspan="3"></td>
+                </tr>
+            </tfoot>
         </table>
     </div>
-    {% else %}
-        <div class="mini-empty">No materials added yet. <span style="color:var(--text-muted);">BOM management coming in Level 5.</span></div>
     {% endif %}
+
+    <!-- Add Material Form -->
+    <details class="add-panel" {% if not materials %}open{% endif %}>
+        <summary>＋ Add Material</summary>
+        <form method="POST" action="{{ url_for('materials.add', project_id=project.id) }}" class="inline-form mat-form">
+            <div class="mat-form-grid">
+                <div class="form-group">
+                    <label>Item Name *</label>
+                    <input type="text" name="item_name" class="form-control" placeholder="e.g. Red PU Leather" required>
+                </div>
+                <div class="form-group">
+                    <label>Category</label>
+                    <select name="category" class="form-control">
+                        {% for cat in ['fabric','foam','hardware','paint','wig','consumable','electronics','other'] %}
+                        <option value="{{ cat }}">{{ cat|capitalize }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Link to Part</label>
+                    <select name="part_id" class="form-control">
+                        <option value="">— Project-wide —</option>
+                        {% for part in parts %}
+                        <option value="{{ part.id }}">{{ part.name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Quantity</label>
+                    <input type="number" name="quantity" class="form-control" value="1" min="0.01" step="any">
+                </div>
+                <div class="form-group">
+                    <label>Unit</label>
+                    <select name="unit" class="form-control">
+                        {% for u in ['pcs','meters','sheets','ml','grams','liters','kg','rolls','pairs','sets'] %}
+                        <option value="{{ u }}">{{ u }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Est. Price / unit ($)</label>
+                    <input type="number" name="price_est" class="form-control" value="0" min="0" step="0.01">
+                </div>
+                <div class="form-group">
+                    <label>Vendor URL</label>
+                    <input type="url" name="vendor_url" class="form-control" placeholder="https://...">
+                </div>
+                <div class="form-group" style="display:flex; align-items:center; gap:10px; padding-top:28px;">
+                    <input type="checkbox" name="in_stash" id="in_stash" style="width:16px; height:16px; accent-color:var(--accent-teal);">
+                    <label for="in_stash" style="text-transform:none; font-size:14px; color:var(--text-primary); cursor:pointer;">
+                        🗃️ I already own this (In Stash)
+                    </label>
+                </div>
+            </div>
+            <button type="submit" class="btn btn-primary btn-sm" style="margin-top:8px;">Add to BOM</button>
+        </form>
+    </details>
 </section>
 
 <!-- Notes -->
 {% if project.notes %}
-<section style="margin-top: 32px;">
+<section style="margin-bottom:32px;">
     <h2 class="section-title">📝 Notes</h2>
     <div class="card notes-block">{{ project.notes }}</div>
 </section>
 {% endif %}
 
 <!-- Danger Zone -->
-<section style="margin-top: 48px; border-top: 1px solid var(--border-subtle); padding-top: 32px;">
-    <h2 class="section-title" style="color: var(--color-error);">⚠️ Danger Zone</h2>
+<section style="border-top:1px solid var(--border-subtle); padding-top:28px;">
+    <h2 class="section-title" style="color:var(--color-error);">⚠️ Danger Zone</h2>
     <form method="POST" action="{{ url_for('projects.delete', project_id=project.id) }}"
-          onsubmit="return confirm('Are you sure you want to permanently delete this project? This cannot be undone.');">
-        <button type="submit" class="btn" style="background: var(--color-error-bg); color: var(--color-error); border: 1px solid var(--color-error);">
+          onsubmit="return confirm('Permanently delete this project and ALL its parts, tasks, and materials?');">
+        <button type="submit" class="btn" style="background:var(--color-error-bg); color:var(--color-error); border:1px solid var(--color-error);">
             🗑️ Delete Project
         </button>
     </form>

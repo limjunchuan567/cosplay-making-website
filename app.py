@@ -32,35 +32,39 @@ def create_app():
     from projects import bp as projects_bp
     app.register_blueprint(projects_bp)
 
-    # ── Dashboard (root route) ─────────────────────────────────────────────
+    from parts import bp as parts_bp
+    app.register_blueprint(parts_bp)
+
+    from tasks import bp as tasks_bp
+    app.register_blueprint(tasks_bp)
+
+    from materials import bp as materials_bp
+    app.register_blueprint(materials_bp)
+
+    # ── Dashboard ──────────────────────────────────────────────────────────
     @app.route("/")
     @login_required
     def index():
         from db import get_db
         db = get_db()
-
-        # Fetch all projects for this user with budget spend calculated
         rows = db.execute(
             """SELECT p.*,
                       COALESCE(SUM(m.quantity * m.price_est), 0) as budget_spent
                FROM projects p
-               LEFT JOIN materials m
-                 ON m.project_id = p.id AND m.in_stash = 0
+               LEFT JOIN materials m ON m.project_id = p.id AND m.in_stash = 0
                WHERE p.user_id = ?
                GROUP BY p.id
                ORDER BY p.updated_at DESC""",
             (g.user["id"],)
         ).fetchall()
 
-        # Convert to dicts and add days_left
         projects = []
         today = date.today()
         for row in rows:
             p = dict(row)
             if p.get("convention_date"):
                 try:
-                    con_date = date.fromisoformat(p["convention_date"])
-                    p["days_left"] = (con_date - today).days
+                    p["days_left"] = (date.fromisoformat(p["convention_date"]) - today).days
                 except ValueError:
                     p["days_left"] = None
             else:
