@@ -1,6 +1,215 @@
 {% extends "base.html" %}
 {% block title %}{{ project.character_name or project.name }}{% endblock %}
 
+{% block head %}
+<!-- mannequin.js importmap for the 3D costume preview -->
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/",
+    "mannequin": "https://cdn.jsdelivr.net/npm/mannequin-js@4.6.6/src/mannequin.js"
+  }
+}
+</script>
+
+<!-- ── Costume-fit 3D Mannequin (ESM module) ─────────────────────────── -->
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { Female, Male } from 'mannequin';
+
+// Parts data injected from Jinja — category drives zone colour
+const PROJECT_PARTS = [
+  {% for part in parts %}
+  { name: {{ part.name | tojson }}, category: {{ part.category | tojson }} },
+  {% endfor %}
+];
+
+// category → zone colour
+const CAT_COLORS = {
+  wig:        0xbb86fc,  // purple
+  garment:    0x03dac6,  // teal
+  armor:      0x5bc0de,  // steel blue
+  prop:       0xf4c430,  // gold
+  footwear:   0xe05050,  // coral
+  accessory:  0xffa500,  // orange
+  makeup:     0xff69b4,  // pink
+  electronics:0x00ff99,  // green
+  other:      0x888899,  // grey
+};
+
+// mannequin.js body-part name fragment → category precedence order for colouring
+const ZONE_PART_MAP = {
+  head:    ['wig', 'makeup', 'accessory', 'armor'],
+  neck:    ['armor', 'accessory', 'garment'],
+  torso:   ['armor', 'garment'],
+  pelvis:  ['armor', 'garment'],
+  l_arm:   ['armor', 'accessory', 'garment'],
+  r_arm:   ['armor', 'accessory', 'garment'],
+  l_forearm:['armor', 'accessory', 'garment'],
+  r_forearm:['armor', 'accessory', 'garment'],
+  l_hand:  ['accessory', 'armor', 'garment'],
+  r_hand:  ['accessory', 'armor', 'garment'],
+  l_leg:   ['armor', 'garment', 'footwear'],
+  r_leg:   ['armor', 'garment', 'footwear'],
+  l_shin:  ['armor', 'footwear', 'garment'],
+  r_shin:  ['armor', 'footwear', 'garment'],
+  l_ankle: ['footwear', 'armor'],
+  r_ankle: ['footwear', 'armor'],
+};
+
+function pickColor(bodyPartName) {
+  const name = bodyPartName.toLowerCase();
+  for (const [zone, priority] of Object.entries(ZONE_PART_MAP)) {
+    if (name.includes(zone)) {
+      for (const cat of priority) {
+        if (PROJECT_PARTS.some(p => p.category === cat)) {
+          return CAT_COLORS[cat] ?? 0x888899;
+        }
+      }
+    }
+  }
+  return null;
+}
+
+// ── Build scene ───────────────────────────────────────────────────────────
+const container = document.getElementById('costume-scene');
+if (!container) throw new Error('costume-scene not found');
+const W = container.clientWidth || 600;
+const H = 420;
+
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setPixelRatio(window.devicePixelRatio);
+renderer.setSize(W, H);
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+container.appendChild(renderer.domElement);
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x0d0d0f);
+scene.fog = new THREE.FogExp2(0x0d0d0f, 0.022);
+
+const camera = new THREE.PerspectiveCamera(40, W / H, 0.1, 500);
+camera.position.set(0, 100, 180);
+
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true;
+controls.dampingFactor = 0.08;
+controls.target.set(0, 90, 0);
+controls.minDistance = 60;
+controls.maxDistance = 350;
+controls.maxPolarAngle = Math.PI * 0.88;
+controls.update();
+
+// Lighting
+scene.add(new THREE.AmbientLight(0xfff8f0, 0.75));
+const key = new THREE.DirectionalLight(0xfff4e0, 1.3);
+key.position.set(60, 160, 100); key.castShadow = true; scene.add(key);
+const fill = new THREE.DirectionalLight(0xd0e8ff, 0.45);
+fill.position.set(-80, 80, -40); scene.add(fill);
+const rim = new THREE.DirectionalLight(0xbb86fc, 0.3);
+rim.position.set(0, 20, -120); scene.add(rim);
+
+// Ground
+const ground = new THREE.Mesh(
+  new THREE.PlaneGeometry(600, 600),
+  new THREE.MeshStandardMaterial({ color: 0x111118, roughness: 0.9 })
+);
+ground.rotation.x = -Math.PI / 2; ground.receiveShadow = true;
+scene.add(ground);
+const grid = new THREE.GridHelper(300, 30, 0x222230, 0x1a1a26);
+grid.position.y = 0.1; scene.add(grid);
+
+// ── Build mannequin ────────────────────────────────────────────────────────
+let figure = null;
+let costumeMode = false;
+const BODY_COLOR  = 0xc8a97a;
+const JOINT_COLOR = 0xaa88cc;
+
+function buildFigure(heightCm) {
+  if (figure) { scene.remove(figure); figure = null; }
+  figure = new Female(heightCm || 165);
+  figure.castShadow = true;
+  applyColors(false);
+  scene.add(figure);
+
+  // Aim camera at chest
+  const ch = (heightCm || 165) * 0.63;
+  controls.target.set(0, ch, 0);
+  camera.position.set(0, ch + 30, (heightCm || 165) * 0.9);
+  controls.update();
+
+  document.getElementById('costume-loading').style.display = 'none';
+  buildLegend();
+}
+
+function applyColors(costume) {
+  if (!figure) return;
+  figure.traverse(obj => {
+    if (!(obj instanceof THREE.Mesh)) return;
+    const name = obj.name || '';
+    if (costume) {
+      const c = pickColor(name);
+      if (c !== null) {
+        obj.material = new THREE.MeshStandardMaterial({
+          color: c, roughness: 0.35, metalness: 0.05,
+          transparent: true, opacity: 0.82
+        });
+        return;
+      }
+    }
+    // Default body-frame look
+    const isJoint = name.toLowerCase().includes('joint') || name.toLowerCase().includes('sphere');
+    obj.material = new THREE.MeshStandardMaterial({
+      color: isJoint ? JOINT_COLOR : BODY_COLOR,
+      roughness: isJoint ? 0.3 : 0.6, metalness: 0
+    });
+  });
+}
+
+function buildLegend() {
+  const legend = document.getElementById('mannequin-legend');
+  if (!legend) return;
+  const usedCats = [...new Set(PROJECT_PARTS.map(p => p.category))];
+  legend.innerHTML = usedCats.map(cat => {
+    const hex = '#' + (CAT_COLORS[cat] || 0x888899).toString(16).padStart(6, '0');
+    return `<span style="display:flex;align-items:center;gap:4px;">
+      <span style="width:10px;height:10px;border-radius:50%;background:${hex};flex-shrink:0;"></span>
+      ${cat}
+    </span>`;
+  }).join('');
+}
+
+// Exposed globally so the toggle checkbox can call it
+window._setCostumeMode = function(enabled) {
+  costumeMode = enabled;
+  applyColors(costumeMode);
+};
+
+// Fetch user measurements then build
+fetch('{{ url_for("measurements.mannequin_api") }}')
+  .then(r => r.json())
+  .then(d => buildFigure(d.height_cm || 165))
+  .catch(() => buildFigure(165));
+
+// ── Render loop ────────────────────────────────────────────────────────────
+(function animate() {
+  requestAnimationFrame(animate);
+  controls.update();
+  renderer.render(scene, camera);
+})();
+
+window.addEventListener('resize', () => {
+  const w = container.clientWidth;
+  renderer.setSize(w, H);
+  camera.aspect = w / H;
+  camera.updateProjectionMatrix();
+});
+</script>
+{% endblock %}
+
 {% block content %}
 <!-- Header -->
 <div class="page-header">
@@ -157,6 +366,64 @@
             </div>
         </form>
     </details>
+</section>
+
+<!-- ══════════════════════════════════════════════════════════
+     3D COSTUME FIT MANNEQUIN
+══════════════════════════════════════════════════════════ -->
+<section style="margin-bottom:32px;">
+    <div class="section-header">
+        <div>
+            <h2 class="section-title">🧍 3D Costume Fit Preview</h2>
+            <p style="font-size:13px; color:var(--text-secondary); margin-top:2px;">
+                Visualize how costume parts map onto your body. Zones are coloured by detected parts from AI analysis.
+            </p>
+        </div>
+    </div>
+    <div class="card" style="padding:0; overflow:hidden;">
+        <!-- Toggle row -->
+        <div style="padding:10px 18px; border-bottom:1px solid var(--border-subtle); display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px; background:rgba(255,255,255,0.02);">
+            <div style="display:flex; align-items:center; gap:10px; font-size:12px; color:var(--text-secondary);">
+                <span>🧍 Body Frame</span>
+                <label style="position:relative; width:44px; height:24px; flex-shrink:0; display:inline-block;">
+                    <input type="checkbox" id="costumeToggle" onchange="window._setCostumeMode(this.checked)" style="opacity:0; width:0; height:0;">
+                    <span style="position:absolute; inset:0; background:#333344; border-radius:24px; cursor:pointer; transition:background 0.2s;">
+                    </span>
+                </label>
+                <span style="color:#03dac6;">👗 Costume Fit</span>
+            </div>
+            <div id="mannequin-legend" style="display:flex; gap:12px; flex-wrap:wrap; font-size:11px; color:var(--text-secondary);">
+                <!-- legends injected by JS -->
+            </div>
+        </div>
+
+        <!-- 3D scene -->
+        <div id="costume-scene" style="width:100%; height:420px; background:#0d0d0f; position:relative; cursor:grab;">
+            <div id="costume-loading" style="position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center; color:var(--text-muted); font-size:13px; gap:10px; pointer-events:none;">
+                <div style="width:32px; height:32px; border:3px solid #2a2a3a; border-top-color:#bb86fc; border-radius:50%; animation:spin 0.8s linear infinite;"></div>
+                <span>Loading 3D figure…</span>
+            </div>
+        </div>
+        <style>@keyframes spin { to { transform: rotate(360deg); } }</style>
+        <style>
+            /* Toggle slider knob — injected here because Jinja strips <style> in mid-template */
+            #costumeToggle + span::before {
+                content: '';
+                position: absolute;
+                width: 18px; height: 18px;
+                left: 3px; top: 3px;
+                background: #aaa;
+                border-radius: 50%;
+                transition: transform 0.2s, background 0.2s;
+            }
+            #costumeToggle:checked + span { background: rgba(3,218,198,0.3); }
+            #costumeToggle:checked + span::before { transform: translateX(20px); background: #03dac6; }
+        </style>
+
+        <div style="padding:8px 18px; border-top:1px solid var(--border-subtle); font-size:11px; color:var(--text-muted); text-align:right;">
+            🖱️ Drag to rotate · Scroll to zoom · Based on your <a href="{{ url_for('measurements.index') }}" style="color:var(--accent-purple);">📏 measurements</a>
+        </div>
+    </div>
 </section>
 
 <!-- ══════════════════════════════════════════════════════════
@@ -699,5 +966,201 @@ function submitImportParts() {
         btn.textContent = 'Add Selected Parts to Project';
     });
 }
+</script>
+
+<!-- ── Costume-fit 3D Mannequin (ESM module) ─────────────────────────── -->
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { Female, Male } from 'mannequin';
+
+// Parts data injected from Jinja — category drives zone colour
+const PROJECT_PARTS = [
+  {% for part in parts %}
+  { name: {{ part.name | tojson }}, category: {{ part.category | tojson }} },
+  {% endfor %}
+];
+
+// category → zone colour
+const CAT_COLORS = {
+  wig:        0xbb86fc,  // purple
+  garment:    0x03dac6,  // teal
+  armor:      0x5bc0de,  // steel blue
+  prop:       0xf4c430,  // gold
+  footwear:   0xe05050,  // coral
+  accessory:  0xffa500,  // orange
+  makeup:     0xff69b4,  // pink
+  electronics:0x00ff99,  // green
+  other:      0x888899,  // grey
+};
+
+// mannequin.js body-part name fragment → category precedence order for colouring
+const ZONE_PART_MAP = {
+  head:    ['wig', 'makeup', 'accessory', 'armor'],
+  neck:    ['armor', 'accessory', 'garment'],
+  torso:   ['armor', 'garment'],
+  pelvis:  ['armor', 'garment'],
+  l_arm:   ['armor', 'accessory', 'garment'],
+  r_arm:   ['armor', 'accessory', 'garment'],
+  l_forearm:['armor', 'accessory', 'garment'],
+  r_forearm:['armor', 'accessory', 'garment'],
+  l_hand:  ['accessory', 'armor', 'garment'],
+  r_hand:  ['accessory', 'armor', 'garment'],
+  l_leg:   ['armor', 'garment', 'footwear'],
+  r_leg:   ['armor', 'garment', 'footwear'],
+  l_shin:  ['armor', 'footwear', 'garment'],
+  r_shin:  ['armor', 'footwear', 'garment'],
+  l_ankle: ['footwear', 'armor'],
+  r_ankle: ['footwear', 'armor'],
+};
+
+function pickColor(bodyPartName) {
+  const name = bodyPartName.toLowerCase();
+  for (const [zone, priority] of Object.entries(ZONE_PART_MAP)) {
+    if (name.includes(zone)) {
+      for (const cat of priority) {
+        if (PROJECT_PARTS.some(p => p.category === cat)) {
+          return CAT_COLORS[cat] ?? 0x888899;
+        }
+      }
+    }
+  }
+  return null;
+}
+
+// ── Build scene ───────────────────────────────────────────────────────────
+const container = document.getElementById('costume-scene');
+if (!container) throw new Error('costume-scene not found');
+const W = container.clientWidth || 600;
+const H = 420;
+
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setPixelRatio(window.devicePixelRatio);
+renderer.setSize(W, H);
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+container.appendChild(renderer.domElement);
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x0d0d0f);
+scene.fog = new THREE.FogExp2(0x0d0d0f, 0.022);
+
+const camera = new THREE.PerspectiveCamera(40, W / H, 0.1, 500);
+camera.position.set(0, 100, 180);
+
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true;
+controls.dampingFactor = 0.08;
+controls.target.set(0, 90, 0);
+controls.minDistance = 60;
+controls.maxDistance = 350;
+controls.maxPolarAngle = Math.PI * 0.88;
+controls.update();
+
+// Lighting
+scene.add(new THREE.AmbientLight(0xfff8f0, 0.75));
+const key = new THREE.DirectionalLight(0xfff4e0, 1.3);
+key.position.set(60, 160, 100); key.castShadow = true; scene.add(key);
+const fill = new THREE.DirectionalLight(0xd0e8ff, 0.45);
+fill.position.set(-80, 80, -40); scene.add(fill);
+const rim = new THREE.DirectionalLight(0xbb86fc, 0.3);
+rim.position.set(0, 20, -120); scene.add(rim);
+
+// Ground
+const ground = new THREE.Mesh(
+  new THREE.PlaneGeometry(600, 600),
+  new THREE.MeshStandardMaterial({ color: 0x111118, roughness: 0.9 })
+);
+ground.rotation.x = -Math.PI / 2; ground.receiveShadow = true;
+scene.add(ground);
+const grid = new THREE.GridHelper(300, 30, 0x222230, 0x1a1a26);
+grid.position.y = 0.1; scene.add(grid);
+
+// ── Build mannequin ────────────────────────────────────────────────────────
+let figure = null;
+let costumeMode = false;
+const BODY_COLOR  = 0xc8a97a;
+const JOINT_COLOR = 0xaa88cc;
+
+function buildFigure(heightCm) {
+  if (figure) { scene.remove(figure); figure = null; }
+  figure = new Female(heightCm || 165);
+  figure.castShadow = true;
+  applyColors(false);
+  scene.add(figure);
+
+  // Aim camera at chest
+  const ch = (heightCm || 165) * 0.63;
+  controls.target.set(0, ch, 0);
+  camera.position.set(0, ch + 30, (heightCm || 165) * 0.9);
+  controls.update();
+
+  document.getElementById('costume-loading').style.display = 'none';
+  buildLegend();
+}
+
+function applyColors(costume) {
+  if (!figure) return;
+  figure.traverse(obj => {
+    if (!(obj instanceof THREE.Mesh)) return;
+    const name = obj.name || '';
+    if (costume) {
+      const c = pickColor(name);
+      if (c !== null) {
+        obj.material = new THREE.MeshStandardMaterial({
+          color: c, roughness: 0.35, metalness: 0.05,
+          transparent: true, opacity: 0.82
+        });
+        return;
+      }
+    }
+    // Default body-frame look
+    const isJoint = name.toLowerCase().includes('joint') || name.toLowerCase().includes('sphere');
+    obj.material = new THREE.MeshStandardMaterial({
+      color: isJoint ? JOINT_COLOR : BODY_COLOR,
+      roughness: isJoint ? 0.3 : 0.6, metalness: 0
+    });
+  });
+}
+
+function buildLegend() {
+  const legend = document.getElementById('mannequin-legend');
+  if (!legend) return;
+  const usedCats = [...new Set(PROJECT_PARTS.map(p => p.category))];
+  legend.innerHTML = usedCats.map(cat => {
+    const hex = '#' + (CAT_COLORS[cat] || 0x888899).toString(16).padStart(6, '0');
+    return `<span style="display:flex;align-items:center;gap:4px;">
+      <span style="width:10px;height:10px;border-radius:50%;background:${hex};flex-shrink:0;"></span>
+      ${cat}
+    </span>`;
+  }).join('');
+}
+
+// Exposed globally so the toggle checkbox can call it
+window._setCostumeMode = function(enabled) {
+  costumeMode = enabled;
+  applyColors(costumeMode);
+};
+
+// Fetch user measurements then build
+fetch('{{ url_for("measurements.mannequin_api") }}')
+  .then(r => r.json())
+  .then(d => buildFigure(d.height_cm || 165))
+  .catch(() => buildFigure(165));
+
+// ── Render loop ────────────────────────────────────────────────────────────
+(function animate() {
+  requestAnimationFrame(animate);
+  controls.update();
+  renderer.render(scene, camera);
+})();
+
+window.addEventListener('resize', () => {
+  const w = container.clientWidth;
+  renderer.setSize(w, H);
+  camera.aspect = w / H;
+  camera.updateProjectionMatrix();
+});
 </script>
 {% endblock %}

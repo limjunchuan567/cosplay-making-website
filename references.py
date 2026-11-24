@@ -26,8 +26,8 @@ load_dotenv()
 _HERE = os.path.dirname(os.path.abspath(__file__))
 load_dotenv(os.path.join(_HERE, ".env"), override=False)
 
-# Preferred Gemini model
-GEMINI_MODEL = "gemini-3.5-flash"
+# Gemini models — will try in order if one is overloaded
+GEMINI_MODELS = ["gemini-3.5-flash", "gemini-3.5-pro"]
 
 bp = Blueprint("references", __name__, url_prefix="/projects/<int:project_id>/references")
 
@@ -247,32 +247,48 @@ Output ONLY valid JSON — no markdown, no code fences, no commentary outside th
 
     from google.genai import types
 
-    response = client.models.generate_content(
-        model=GEMINI_MODEL,
-        contents=[
-            prompt,
-            types.Part.from_bytes(data=image_bytes, mime_type=mime)
-        ],
-        config=types.GenerateContentConfig(
-            response_mime_type="application/json",
-            temperature=0.2
-        )
-    )
+    # Try each model in order until one succeeds
+    last_err = None
+    for model_name in GEMINI_MODELS:
+        try:
+            current_app.logger.info("Trying Gemini model: %s", model_name)
+            response = client.models.generate_content(
+                model=model_name,
+                contents=[
+                    prompt,
+                    types.Part.from_bytes(data=image_bytes, mime_type=mime)
+                ],
+                config=types.GenerateContentConfig(
+                    response_mime_type="application/json",
+                    temperature=0.2
+                )
+            )
 
-    # Strip any accidental markdown code fences
-    raw = response.text.strip()
-    if raw.startswith("```"):
-        raw = raw.split("\n", 1)[-1]
-        if raw.endswith("```"):
-            raw = raw[:-3].strip()
+            # Strip any accidental markdown code fences
+            raw = response.text.strip()
+            if raw.startswith("```"):
+                raw = raw.split("\n", 1)[-1]
+                if raw.endswith("```"):
+                    raw = raw[:-3].strip()
 
-    parsed = json.loads(raw)
+            parsed = json.loads(raw)
+            return jsonify({
+                "success": True,
+                "data": parsed,
+                "ref_id": ref_id,
+                "image_url": url_for("static", filename=ref_dict["image_path"]),
+                "model_used": model_name
+            })
+        except Exception as e:
+            last_err = e
+            current_app.logger.warning("Model %s failed: %s", model_name, str(e)[:200])
+            continue
+
+    # All models failed
     return jsonify({
-        "success": True,
-        "data": parsed,
-        "ref_id": ref_id,
-        "image_url": url_for("static", filename=ref_dict["image_path"])
-    })
+        "success": False,
+        "error": f"All Gemini models are currently unavailable. Last error: {last_err}"
+    }), 503
 
 
 # ── Apply (import) detected parts ─────────────────────────────────────────────
