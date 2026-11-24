@@ -1,6 +1,110 @@
 {% extends "base.html" %}
 {% block title %}Body Measurements & Sizing Profile{% endblock %}
 
+{% block head %}
+<!-- Three.js r128 via CDN — used for the parametric 3D mannequin -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<style>
+/* ── Measurements page layout ─────────────────────────────────────────────── */
+.measurements-layout {
+    display: grid;
+    grid-template-columns: 1fr 380px;
+    gap: 28px;
+    align-items: start;
+}
+@media (max-width: 1024px) {
+    .measurements-layout { grid-template-columns: 1fr; }
+    .mannequin-panel { order: -1; }
+}
+
+/* ── Sticky 3D viewer panel ───────────────────────────────────────────────── */
+.mannequin-panel {
+    position: sticky;
+    top: 80px;
+}
+.mannequin-card {
+    background: var(--bg-surface);
+    border: 1px solid var(--border-subtle);
+    border-radius: 12px;
+    overflow: hidden;
+}
+.mannequin-header {
+    padding: 14px 18px 12px;
+    border-bottom: 1px solid var(--border-subtle);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+.mannequin-header h3 {
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--text-primary);
+    margin: 0;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+.mannequin-hint {
+    font-size: 11px;
+    color: var(--text-muted);
+    margin-top: 2px;
+}
+
+#mannequin-canvas {
+    display: block;
+    width: 100%;
+    height: 480px;
+    cursor: grab;
+    background: #0d0d0f;
+}
+#mannequin-canvas:active { cursor: grabbing; }
+
+.mannequin-footer {
+    padding: 10px 18px;
+    border-top: 1px solid var(--border-subtle);
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    flex-wrap: wrap;
+}
+.mannequin-legend {
+    display: flex;
+    gap: 14px;
+    flex-wrap: wrap;
+}
+.legend-item {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 11px;
+    color: var(--text-secondary);
+}
+.legend-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    flex-shrink: 0;
+}
+.mannequin-controls-hint {
+    font-size: 11px;
+    color: var(--text-muted);
+    margin-left: auto;
+}
+
+/* Height label badge */
+.height-badge {
+    display: inline-block;
+    background: rgba(187,134,252,0.12);
+    border: 1px solid rgba(187,134,252,0.3);
+    color: #bb86fc;
+    border-radius: 6px;
+    font-size: 12px;
+    font-weight: 600;
+    padding: 2px 10px;
+}
+</style>
+{% endblock %}
+
 {% block content %}
 <div class="page-header">
     <div>
@@ -45,186 +149,526 @@
 </div>
 {% endif %}
 
-<div class="form-card" style="max-width: 900px;">
-    <form method="POST" action="{{ url_for('measurements.index') }}" id="measurementsForm">
-        
-        <!-- Unit Switcher -->
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; padding-bottom: 16px; border-bottom: 1px solid var(--border-subtle);">
-            <div>
-                <span style="font-size: 14px; font-weight: 600; color: var(--text-primary);">Measurement Units</span>
-                <p style="font-size: 12px; color: var(--text-muted);">Stored uniformly in centimeters in the database</p>
+<!-- ── Side-by-side layout: form left, mannequin right ─────────────────── -->
+<div class="measurements-layout">
+
+    <!-- LEFT: measurement form -->
+    <div class="form-card" style="max-width: none;">
+        <form method="POST" action="{{ url_for('measurements.index') }}" id="measurementsForm">
+
+            <!-- Unit Switcher -->
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; padding-bottom: 16px; border-bottom: 1px solid var(--border-subtle);">
+                <div>
+                    <span style="font-size: 14px; font-weight: 600; color: var(--text-primary);">Measurement Units</span>
+                    <p style="font-size: 12px; color: var(--text-muted);">Stored uniformly in centimeters in the database</p>
+                </div>
+                <div style="display: flex; gap: 8px;">
+                    <label style="cursor: pointer; display: flex; align-items: center; gap: 6px; font-size: 14px; color: var(--text-primary); text-transform: none;">
+                        <input type="radio" name="preferred_unit" value="cm" id="unitCm" {% if not m or m.preferred_unit != 'in' %}checked{% endif %} onchange="switchUnits('cm')">
+                        Centimeters (cm)
+                    </label>
+                    <label style="cursor: pointer; display: flex; align-items: center; gap: 6px; font-size: 14px; color: var(--text-primary); text-transform: none; margin-left: 12px;">
+                        <input type="radio" name="preferred_unit" value="in" id="unitIn" {% if m and m.preferred_unit == 'in' %}checked{% endif %} onchange="switchUnits('in')">
+                        Inches (in)
+                    </label>
+                </div>
             </div>
-            <div style="display: flex; gap: 8px;">
-                <label style="cursor: pointer; display: flex; align-items: center; gap: 6px; font-size: 14px; color: var(--text-primary); text-transform: none;">
-                    <input type="radio" name="preferred_unit" value="cm" id="unitCm" {% if not m or m.preferred_unit != 'in' %}checked{% endif %} onchange="switchUnits('cm')">
-                    Centimeters (cm)
-                </label>
-                <label style="cursor: pointer; display: flex; align-items: center; gap: 6px; font-size: 14px; color: var(--text-primary); text-transform: none; margin-left: 12px;">
-                    <input type="radio" name="preferred_unit" value="in" id="unitIn" {% if m and m.preferred_unit == 'in' %}checked{% endif %} onchange="switchUnits('in')">
-                    Inches (in)
-                </label>
+
+            <!-- 1. Height & Overall Frame -->
+            <div class="form-section-title">🧍 Height &amp; Frame</div>
+            <div class="two-col" style="margin-bottom: 20px;">
+                <div class="form-group">
+                    <label for="height">Total Height (<span class="unit-label">cm</span>)</label>
+                    <input type="number" step="0.1" id="height" name="height" class="form-control" placeholder="e.g. 175" value="{{ m.height_cm if m and m.height_cm else '' }}">
+                    <span style="font-size: 11px; color: var(--text-muted);">Used to calculate prop and weapon proportions.</span>
+                </div>
+                <div class="form-group">
+                    <label for="shoulder_width">Shoulder Width (<span class="unit-label">cm</span>)</label>
+                    <input type="number" step="0.1" id="shoulder_width" name="shoulder_width" class="form-control" placeholder="e.g. 44" value="{{ m.shoulder_width_cm if m and m.shoulder_width_cm else '' }}">
+                    <span style="font-size: 11px; color: var(--text-muted);">Tip of left shoulder bone to right shoulder bone across back.</span>
+                </div>
+                <div class="form-group">
+                    <label for="torso_length">Torso Length (<span class="unit-label">cm</span>)</label>
+                    <input type="number" step="0.1" id="torso_length" name="torso_length" class="form-control" placeholder="e.g. 48" value="{{ m.torso_length_cm if m and m.torso_length_cm else '' }}">
+                    <span style="font-size: 11px; color: var(--text-muted);">Base of neck (C7 vertebra) down to natural waistline.</span>
+                </div>
+            </div>
+
+            <div class="form-divider"></div>
+
+            <!-- 2. Head & Neck -->
+            <div class="form-section-title">🪖 Head &amp; Neck (Wigs &amp; Helmets)</div>
+            <div class="two-col" style="margin-bottom: 20px;">
+                <div class="form-group">
+                    <label for="head_circumference">Head Circumference (<span class="unit-label">cm</span>)</label>
+                    <input type="number" step="0.1" id="head_circumference" name="head_circumference" class="form-control" placeholder="e.g. 56" value="{{ m.head_circumference_cm if m and m.head_circumference_cm else '' }}">
+                    <span style="font-size: 11px; color: var(--text-muted);">Around widest point above ears/eyebrows. Critical for 3D helmets &amp; wigs!</span>
+                </div>
+                <div class="form-group">
+                    <label for="neck_circumference">Neck Circumference (<span class="unit-label">cm</span>)</label>
+                    <input type="number" step="0.1" id="neck_circumference" name="neck_circumference" class="form-control" placeholder="e.g. 38" value="{{ m.neck_circumference_cm if m and m.neck_circumference_cm else '' }}">
+                    <span style="font-size: 11px; color: var(--text-muted);">For high collars, gorgets, and chokers.</span>
+                </div>
+            </div>
+
+            <div class="form-divider"></div>
+
+            <!-- 3. Torso & Garments -->
+            <div class="form-section-title">👗 Torso &amp; Core (Pattern Drafting &amp; Sizing)</div>
+            <div class="two-col" style="margin-bottom: 20px;">
+                <div class="form-group">
+                    <label for="chest_bust">Chest / Bust (<span class="unit-label">cm</span>)</label>
+                    <input type="number" step="0.1" id="chest_bust" name="chest_bust" class="form-control" placeholder="e.g. 96" value="{{ m.chest_bust_cm if m and m.chest_bust_cm else '' }}">
+                    <span style="font-size: 11px; color: var(--text-muted);">Fullest part of chest/bust. Wear your intended undergarment/binder!</span>
+                </div>
+                <div class="form-group">
+                    <label for="underbust">Underbust (<span class="unit-label">cm</span>)</label>
+                    <input type="number" step="0.1" id="underbust" name="underbust" class="form-control" placeholder="e.g. 82" value="{{ m.underbust_cm if m and m.underbust_cm else '' }}">
+                    <span style="font-size: 11px; color: var(--text-muted);">Directly under the bust line (for corsets and armor under-plates).</span>
+                </div>
+                <div class="form-group">
+                    <label for="waist">Natural Waist (<span class="unit-label">cm</span>)</label>
+                    <input type="number" step="0.1" id="waist" name="waist" class="form-control" placeholder="e.g. 78" value="{{ m.waist_cm if m and m.waist_cm else '' }}">
+                    <span style="font-size: 11px; color: var(--text-muted);">Narrowest part of torso, usually 2-3 cm above navel.</span>
+                </div>
+                <div class="form-group">
+                    <label for="hips">Hips (<span class="unit-label">cm</span>)</label>
+                    <input type="number" step="0.1" id="hips" name="hips" class="form-control" placeholder="e.g. 98" value="{{ m.hips_cm if m and m.hips_cm else '' }}">
+                    <span style="font-size: 11px; color: var(--text-muted);">Widest part around hips and buttocks with feet together.</span>
+                </div>
+            </div>
+
+            <div class="form-divider"></div>
+
+            <!-- 4. Arms & Gauntlets -->
+            <div class="form-section-title">🦾 Arms &amp; Gauntlets</div>
+            <div class="two-col" style="margin-bottom: 20px;">
+                <div class="form-group">
+                    <label for="arm_length">Arm Length (<span class="unit-label">cm</span>)</label>
+                    <input type="number" step="0.1" id="arm_length" name="arm_length" class="form-control" placeholder="e.g. 60" value="{{ m.arm_length_cm if m and m.arm_length_cm else '' }}">
+                    <span style="font-size: 11px; color: var(--text-muted);">Shoulder point to wrist bone with arm slightly bent.</span>
+                </div>
+                <div class="form-group">
+                    <label for="bicep_circumference">Bicep Circumference (<span class="unit-label">cm</span>)</label>
+                    <input type="number" step="0.1" id="bicep_circumference" name="bicep_circumference" class="form-control" placeholder="e.g. 30" value="{{ m.bicep_circumference_cm if m and m.bicep_circumference_cm else '' }}">
+                    <span style="font-size: 11px; color: var(--text-muted);">Fullest part of upper arm (measure flexed for comfort).</span>
+                </div>
+                <div class="form-group">
+                    <label for="wrist_circumference">Wrist Circumference (<span class="unit-label">cm</span>)</label>
+                    <input type="number" step="0.1" id="wrist_circumference" name="wrist_circumference" class="form-control" placeholder="e.g. 17" value="{{ m.wrist_circumference_cm if m and m.wrist_circumference_cm else '' }}">
+                    <span style="font-size: 11px; color: var(--text-muted);">Around wrist bone (for bracers &amp; gauntlet openings).</span>
+                </div>
+            </div>
+
+            <div class="form-divider"></div>
+
+            <!-- 5. Legs & Footwear -->
+            <div class="form-section-title">🦿 Legs &amp; Footwear</div>
+            <div class="two-col" style="margin-bottom: 20px;">
+                <div class="form-group">
+                    <label for="inseam">Inseam (<span class="unit-label">cm</span>)</label>
+                    <input type="number" step="0.1" id="inseam" name="inseam" class="form-control" placeholder="e.g. 80" value="{{ m.inseam_cm if m and m.inseam_cm else '' }}">
+                    <span style="font-size: 11px; color: var(--text-muted);">From crotch seam down inside leg to floor/ankle.</span>
+                </div>
+                <div class="form-group">
+                    <label for="outseam">Outseam (<span class="unit-label">cm</span>)</label>
+                    <input type="number" step="0.1" id="outseam" name="outseam" class="form-control" placeholder="e.g. 104" value="{{ m.outseam_cm if m and m.outseam_cm else '' }}">
+                    <span style="font-size: 11px; color: var(--text-muted);">From waistband down outside leg to ankle.</span>
+                </div>
+                <div class="form-group">
+                    <label for="thigh_circumference">Thigh Circumference (<span class="unit-label">cm</span>)</label>
+                    <input type="number" step="0.1" id="thigh_circumference" name="thigh_circumference" class="form-control" placeholder="e.g. 54" value="{{ m.thigh_circumference_cm if m and m.thigh_circumference_cm else '' }}">
+                    <span style="font-size: 11px; color: var(--text-muted);">Widest point of upper thigh (for thigh-high boots &amp; cuisses).</span>
+                </div>
+                <div class="form-group">
+                    <label for="calf_circumference">Calf Circumference (<span class="unit-label">cm</span>)</label>
+                    <input type="number" step="0.1" id="calf_circumference" name="calf_circumference" class="form-control" placeholder="e.g. 37" value="{{ m.calf_circumference_cm if m and m.calf_circumference_cm else '' }}">
+                    <span style="font-size: 11px; color: var(--text-muted);">Widest point of calf (critical for boot covers &amp; greaves).</span>
+                </div>
+                <div class="form-group">
+                    <label for="shoe_size">Shoe Size</label>
+                    <input type="text" id="shoe_size" name="shoe_size" class="form-control" placeholder="e.g. US 9 / EU 42" value="{{ m.shoe_size if m and m.shoe_size else '' }}">
+                </div>
+            </div>
+
+            <div class="form-divider"></div>
+
+            <!-- Notes -->
+            <div class="form-section-title">📝 Fitting Notes</div>
+            <div class="form-group">
+                <textarea id="notes" name="notes" class="form-control form-textarea" placeholder="Specific fit quirks, e.g. 'broad shoulders, prefer looser armholes, wear with 5cm platform inserts'...">{{ m.notes if m and m.notes else '' }}</textarea>
+            </div>
+
+            <div class="form-actions">
+                <a href="{{ url_for('index') }}" class="btn btn-secondary">Cancel</a>
+                <button type="submit" class="btn btn-primary">Save Measurements Profile 📏</button>
+            </div>
+        </form>
+    </div>
+
+    <!-- RIGHT: 3D mannequin viewer -->
+    <div class="mannequin-panel">
+        <div class="mannequin-card">
+            <div class="mannequin-header">
+                <div>
+                    <h3>🧍 3D Body Preview</h3>
+                    <div class="mannequin-hint">Parametric mannequin — updates after saving</div>
+                </div>
+                <span class="height-badge" id="height-display">
+                    {% if m and m.height_cm %}{{ m.height_cm | int }} cm{% else %}— cm{% endif %}
+                </span>
+            </div>
+
+            <canvas id="mannequin-canvas"></canvas>
+
+            <div class="mannequin-footer">
+                <div class="mannequin-legend">
+                    <div class="legend-item">
+                        <div class="legend-dot" style="background:#bb86fc;"></div>
+                        <span>Measured</span>
+                    </div>
+                    <div class="legend-item">
+                        <div class="legend-dot" style="background:#3a3a4a;"></div>
+                        <span>Estimated</span>
+                    </div>
+                </div>
+                <span class="mannequin-controls-hint">🖱️ Drag to rotate · Scroll to zoom</span>
             </div>
         </div>
+    </div>
 
-        <!-- 1. Height & Overall Frame -->
-        <div class="form-section-title">🧍 Height &amp; Frame</div>
-        <div class="two-col" style="margin-bottom: 20px;">
-            <div class="form-group">
-                <label for="height">Total Height (<span class="unit-label">cm</span>)</label>
-                <input type="number" step="0.1" id="height" name="height" class="form-control" placeholder="e.g. 175" value="{{ m.height_cm if m and m.height_cm else '' }}">
-                <span style="font-size: 11px; color: var(--text-muted);">Used to calculate prop and weapon proportions.</span>
-            </div>
-            <div class="form-group">
-                <label for="shoulder_width">Shoulder Width (<span class="unit-label">cm</span>)</label>
-                <input type="number" step="0.1" id="shoulder_width" name="shoulder_width" class="form-control" placeholder="e.g. 44" value="{{ m.shoulder_width_cm if m and m.shoulder_width_cm else '' }}">
-                <span style="font-size: 11px; color: var(--text-muted);">Tip of left shoulder bone to right shoulder bone across back.</span>
-            </div>
-            <div class="form-group">
-                <label for="torso_length">Torso Length (<span class="unit-label">cm</span>)</label>
-                <input type="number" step="0.1" id="torso_length" name="torso_length" class="form-control" placeholder="e.g. 48" value="{{ m.torso_length_cm if m and m.torso_length_cm else '' }}">
-                <span style="font-size: 11px; color: var(--text-muted);">Base of neck (C7 vertebra) down to natural waistline.</span>
-            </div>
-        </div>
-
-        <div class="form-divider"></div>
-
-        <!-- 2. Head & Neck -->
-        <div class="form-section-title">🪖 Head &amp; Neck (Wigs &amp; Helmets)</div>
-        <div class="two-col" style="margin-bottom: 20px;">
-            <div class="form-group">
-                <label for="head_circumference">Head Circumference (<span class="unit-label">cm</span>)</label>
-                <input type="number" step="0.1" id="head_circumference" name="head_circumference" class="form-control" placeholder="e.g. 56" value="{{ m.head_circumference_cm if m and m.head_circumference_cm else '' }}">
-                <span style="font-size: 11px; color: var(--text-muted);">Around widest point above ears/eyebrows. Critical for 3D helmets &amp; wigs!</span>
-            </div>
-            <div class="form-group">
-                <label for="neck_circumference">Neck Circumference (<span class="unit-label">cm</span>)</label>
-                <input type="number" step="0.1" id="neck_circumference" name="neck_circumference" class="form-control" placeholder="e.g. 38" value="{{ m.neck_circumference_cm if m and m.neck_circumference_cm else '' }}">
-                <span style="font-size: 11px; color: var(--text-muted);">For high collars, gorgets, and chokers.</span>
-            </div>
-        </div>
-
-        <div class="form-divider"></div>
-
-        <!-- 3. Torso & Garments -->
-        <div class="form-section-title">👗 Torso &amp; Core (Pattern Drafting &amp; Sizing)</div>
-        <div class="two-col" style="margin-bottom: 20px;">
-            <div class="form-group">
-                <label for="chest_bust">Chest / Bust (<span class="unit-label">cm</span>)</label>
-                <input type="number" step="0.1" id="chest_bust" name="chest_bust" class="form-control" placeholder="e.g. 96" value="{{ m.chest_bust_cm if m and m.chest_bust_cm else '' }}">
-                <span style="font-size: 11px; color: var(--text-muted);">Fullest part of chest/bust. Wear your intended undergarment/binder!</span>
-            </div>
-            <div class="form-group">
-                <label for="underbust">Underbust (<span class="unit-label">cm</span>)</label>
-                <input type="number" step="0.1" id="underbust" name="underbust" class="form-control" placeholder="e.g. 82" value="{{ m.underbust_cm if m and m.underbust_cm else '' }}">
-                <span style="font-size: 11px; color: var(--text-muted);">Directly under the bust line (for corsets and armor under-plates).</span>
-            </div>
-            <div class="form-group">
-                <label for="waist">Natural Waist (<span class="unit-label">cm</span>)</label>
-                <input type="number" step="0.1" id="waist" name="waist" class="form-control" placeholder="e.g. 78" value="{{ m.waist_cm if m and m.waist_cm else '' }}">
-                <span style="font-size: 11px; color: var(--text-muted);">Narrowest part of torso, usually 2-3 cm above navel.</span>
-            </div>
-            <div class="form-group">
-                <label for="hips">Hips (<span class="unit-label">cm</span>)</label>
-                <input type="number" step="0.1" id="hips" name="hips" class="form-control" placeholder="e.g. 98" value="{{ m.hips_cm if m and m.hips_cm else '' }}">
-                <span style="font-size: 11px; color: var(--text-muted);">Widest part around hips and buttocks with feet together.</span>
-            </div>
-        </div>
-
-        <div class="form-divider"></div>
-
-        <!-- 4. Arms & Gauntlets -->
-        <div class="form-section-title">🦾 Arms &amp; Gauntlets</div>
-        <div class="two-col" style="margin-bottom: 20px;">
-            <div class="form-group">
-                <label for="arm_length">Arm Length (<span class="unit-label">cm</span>)</label>
-                <input type="number" step="0.1" id="arm_length" name="arm_length" class="form-control" placeholder="e.g. 60" value="{{ m.arm_length_cm if m and m.arm_length_cm else '' }}">
-                <span style="font-size: 11px; color: var(--text-muted);">Shoulder point to wrist bone with arm slightly bent.</span>
-            </div>
-            <div class="form-group">
-                <label for="bicep_circumference">Bicep Circumference (<span class="unit-label">cm</span>)</label>
-                <input type="number" step="0.1" id="bicep_circumference" name="bicep_circumference" class="form-control" placeholder="e.g. 30" value="{{ m.bicep_circumference_cm if m and m.bicep_circumference_cm else '' }}">
-                <span style="font-size: 11px; color: var(--text-muted);">Fullest part of upper arm (measure flexed for comfort).</span>
-            </div>
-            <div class="form-group">
-                <label for="wrist_circumference">Wrist Circumference (<span class="unit-label">cm</span>)</label>
-                <input type="number" step="0.1" id="wrist_circumference" name="wrist_circumference" class="form-control" placeholder="e.g. 17" value="{{ m.wrist_circumference_cm if m and m.wrist_circumference_cm else '' }}">
-                <span style="font-size: 11px; color: var(--text-muted);">Around wrist bone (for bracers &amp; gauntlet openings).</span>
-            </div>
-        </div>
-
-        <div class="form-divider"></div>
-
-        <!-- 5. Legs & Footwear -->
-        <div class="form-section-title">🦿 Legs &amp; Footwear</div>
-        <div class="two-col" style="margin-bottom: 20px;">
-            <div class="form-group">
-                <label for="inseam">Inseam (<span class="unit-label">cm</span>)</label>
-                <input type="number" step="0.1" id="inseam" name="inseam" class="form-control" placeholder="e.g. 80" value="{{ m.inseam_cm if m and m.inseam_cm else '' }}">
-                <span style="font-size: 11px; color: var(--text-muted);">From crotch seam down inside leg to floor/ankle.</span>
-            </div>
-            <div class="form-group">
-                <label for="outseam">Outseam (<span class="unit-label">cm</span>)</label>
-                <input type="number" step="0.1" id="outseam" name="outseam" class="form-control" placeholder="e.g. 104" value="{{ m.outseam_cm if m and m.outseam_cm else '' }}">
-                <span style="font-size: 11px; color: var(--text-muted);">From waistband down outside leg to ankle.</span>
-            </div>
-            <div class="form-group">
-                <label for="thigh_circumference">Thigh Circumference (<span class="unit-label">cm</span>)</label>
-                <input type="number" step="0.1" id="thigh_circumference" name="thigh_circumference" class="form-control" placeholder="e.g. 54" value="{{ m.thigh_circumference_cm if m and m.thigh_circumference_cm else '' }}">
-                <span style="font-size: 11px; color: var(--text-muted);">Widest point of upper thigh (for thigh-high boots &amp; cuisses).</span>
-            </div>
-            <div class="form-group">
-                <label for="calf_circumference">Calf Circumference (<span class="unit-label">cm</span>)</label>
-                <input type="number" step="0.1" id="calf_circumference" name="calf_circumference" class="form-control" placeholder="e.g. 37" value="{{ m.calf_circumference_cm if m and m.calf_circumference_cm else '' }}">
-                <span style="font-size: 11px; color: var(--text-muted);">Widest point of calf (critical for boot covers &amp; greaves).</span>
-            </div>
-            <div class="form-group">
-                <label for="shoe_size">Shoe Size</label>
-                <input type="text" id="shoe_size" name="shoe_size" class="form-control" placeholder="e.g. US 9 / EU 42" value="{{ m.shoe_size if m and m.shoe_size else '' }}">
-            </div>
-        </div>
-
-        <div class="form-divider"></div>
-
-        <!-- Notes -->
-        <div class="form-section-title">📝 Fitting Notes</div>
-        <div class="form-group">
-            <textarea id="notes" name="notes" class="form-control form-textarea" placeholder="Specific fit quirks, e.g. 'broad shoulders, prefer looser armholes, wear with 5cm platform inserts'...">{{ m.notes if m and m.notes else '' }}</textarea>
-        </div>
-
-        <div class="form-actions">
-            <a href="{{ url_for('index') }}" class="btn btn-secondary">Cancel</a>
-            <button type="submit" class="btn btn-primary">Save Measurements Profile 📏</button>
-        </div>
-    </form>
-</div>
+</div><!-- /.measurements-layout -->
 {% endblock %}
 
 {% block scripts %}
 <script>
+/* ── Unit switcher (existing) ────────────────────────────────────────── */
 let currentUnit = '{{ m.preferred_unit if m and m.preferred_unit else "cm" }}';
 
 function switchUnits(newUnit) {
     if (newUnit === currentUnit) return;
-    
     const inputs = document.querySelectorAll('#measurementsForm input[type="number"]');
     const labels = document.querySelectorAll('.unit-label');
-    
-    labels.forEach(label => {
-        label.textContent = newUnit;
-    });
-
+    labels.forEach(label => { label.textContent = newUnit; });
     inputs.forEach(input => {
         if (input.value && !isNaN(input.value)) {
             const val = parseFloat(input.value);
-            if (newUnit === 'in') {
-                input.value = (val / 2.54).toFixed(1);
-            } else {
-                input.value = (val * 2.54).toFixed(1);
-            }
+            input.value = newUnit === 'in' ? (val / 2.54).toFixed(1) : (val * 2.54).toFixed(1);
         }
     });
-
     currentUnit = newUnit;
 }
+
+/* ── Three.js parametric mannequin ──────────────────────────────────── */
+(function () {
+    const PI2 = Math.PI * 2;
+
+    // ── Helpers ───────────────────────────────────────────────────────
+    /** Convert circumference (cm) to radius in Three.js units (1 unit = 10 cm) */
+    function circToR(circ, fallback) {
+        return ((circ || fallback) / PI2) / 10;
+    }
+    function cm(v, fallback) { return (v || fallback) / 10; }
+
+    // ── Build mannequin from measurement data ─────────────────────────
+    function buildMannequin(scene, data) {
+        // Clear old mannequin group if present
+        const old = scene.getObjectByName('mannequin');
+        if (old) scene.remove(old);
+
+        const group = new THREE.Group();
+        group.name = 'mannequin';
+
+        const h = data.height_cm || 170;
+
+        // ── Derived proportions (all in cm, converted to units /10) ──
+        const headCirc   = data.head_circumference_cm  || h * 0.345;
+        const neckCirc   = data.neck_circumference_cm  || h * 0.195;
+        const chest      = data.chest_bust_cm          || h * 0.555;
+        const waist      = data.waist_cm               || h * 0.435;
+        const hips       = data.hips_cm                || h * 0.565;
+        const shoulderW  = data.shoulder_width_cm      || h * 0.259;
+        const armLen     = data.arm_length_cm          || h * 0.335;
+        const bicep      = data.bicep_circumference_cm || h * 0.167;
+        const wrist      = data.wrist_circumference_cm || h * 0.098;
+        const inseam     = data.inseam_cm              || h * 0.470;
+        const thigh      = data.thigh_circumference_cm || h * 0.330;
+        const calf       = data.calf_circumference_cm  || h * 0.213;
+        const torsoLen   = data.torso_length_cm        || h * 0.282;
+
+        // Radii (Three.js units, 1 unit = 10 cm)
+        const rHead    = circToR(headCirc, h * 0.345);
+        const rNeck    = circToR(neckCirc, h * 0.195);
+        const rChest   = circToR(chest,   h * 0.555);
+        const rWaist   = circToR(waist,   h * 0.435);
+        const rHips    = circToR(hips,    h * 0.565);
+        const rBicep   = circToR(bicep,   h * 0.167);
+        const rWrist   = circToR(wrist,   h * 0.098);
+        const rThigh   = circToR(thigh,   h * 0.330);
+        const rCalf    = circToR(calf,    h * 0.213);
+        const rAnkle   = rCalf * 0.65;
+        const rForearm = (rBicep + rWrist) / 2;
+
+        // Heights (Three.js units)
+        const hHead      = rHead * 1.3;          // slightly oval head
+        const hNeck      = cm(h * 0.053, 9);
+        const hTorsoTop  = cm(torsoLen * 0.55, h * 0.155); // chest to waist
+        const hTorsoBot  = cm(torsoLen * 0.45, h * 0.127); // waist to hip
+        const hLegTop    = cm(inseam * 0.55, h * 0.258);   // thigh
+        const hLegBot    = cm(inseam * 0.45, h * 0.212);   // calf
+        const hFoot      = cm(h * 0.038, 6.5);
+        const hArmTop    = cm(armLen * 0.46, h * 0.154);   // upper arm
+        const hArmBot    = cm(armLen * 0.54, h * 0.181);   // forearm
+
+        // Materials — purple for measured, dark for estimated
+        const measured = data.height_cm !== null;
+        const matBody = new THREE.MeshPhongMaterial({
+            color: measured ? 0xbb86fc : 0x444455,
+            shininess: 60,
+            specular: 0x333355,
+        });
+        const matAccent = new THREE.MeshPhongMaterial({
+            color: 0x03dac6,
+            shininess: 80,
+            specular: 0x224444,
+        });
+        const matDark = new THREE.MeshPhongMaterial({
+            color: 0x2a2a3a,
+            shininess: 30,
+        });
+
+        function mesh(geo, mat) {
+            return new THREE.Mesh(geo, mat || matBody);
+        }
+
+        // ── Coordinate system: Y=0 is floor level ─────────────────────
+        let y = cm(h, h); // start at top of head (full height up from floor)
+
+        // HEAD (sphere, slightly oval)
+        const headMesh = mesh(new THREE.SphereGeometry(rHead, 20, 16));
+        headMesh.scale.y = 1.25; // oval
+        const headY = y - hHead * 0.65;
+        headMesh.position.y = headY;
+        group.add(headMesh);
+        y = headY - hHead * 0.65; // bottom of head
+
+        // NECK
+        const neckMesh = mesh(new THREE.CylinderGeometry(rNeck, rNeck * 1.05, hNeck, 14));
+        neckMesh.position.y = y - hNeck / 2;
+        group.add(neckMesh);
+        y -= hNeck;
+
+        // SHOULDERS (a wider disc to show shoulder spread)
+        const shoulderR = cm(shoulderW, h * 0.259) / 2;
+        const shoulderH = hNeck * 0.4;
+        const shoulderMesh = mesh(
+            new THREE.CylinderGeometry(shoulderR * 0.95, shoulderR, shoulderH, 16),
+            matAccent
+        );
+        shoulderMesh.position.y = y - shoulderH / 2;
+        group.add(shoulderMesh);
+        const shoulderY = y;
+        y -= shoulderH;
+
+        // TORSO — upper (chest → waist, tapered cylinder)
+        const torsoTopMesh = mesh(new THREE.CylinderGeometry(rWaist, rChest, hTorsoTop, 18));
+        torsoTopMesh.position.y = y - hTorsoTop / 2;
+        group.add(torsoTopMesh);
+        y -= hTorsoTop;
+
+        // TORSO — lower (waist → hips, tapered cylinder)
+        const torsoBottomMesh = mesh(new THREE.CylinderGeometry(rHips, rWaist, hTorsoBot, 18));
+        torsoBottomMesh.position.y = y - hTorsoBot / 2;
+        group.add(torsoBottomMesh);
+        const hipY = y - hTorsoBot; // top of legs
+
+        // LEGS (left and right, symmetric)
+        const legOffsetX = rHips * 0.65;
+        [-1, 1].forEach(side => {
+            let ly = hipY;
+            // Upper leg (thigh)
+            const upper = mesh(new THREE.CylinderGeometry(rCalf * 0.95, rThigh, hLegTop, 14));
+            upper.position.set(side * legOffsetX, ly - hLegTop / 2, 0);
+            group.add(upper);
+            ly -= hLegTop;
+
+            // Lower leg (calf)
+            const lower = mesh(new THREE.CylinderGeometry(rAnkle, rCalf, hLegBot, 14));
+            lower.position.set(side * legOffsetX, ly - hLegBot / 2, 0);
+            group.add(lower);
+            ly -= hLegBot;
+
+            // Foot (box)
+            const footW = rAnkle * 1.4;
+            const footD = rAnkle * 3.2;
+            const foot = mesh(
+                new THREE.BoxGeometry(footW * 2, hFoot, footD),
+                matDark
+            );
+            foot.position.set(side * legOffsetX, ly - hFoot / 2, footD * 0.2);
+            group.add(foot);
+        });
+
+        // ARMS (left and right)
+        const armOffsetX = shoulderR;
+        [-1, 1].forEach(side => {
+            let ay = shoulderY;
+            // Upper arm
+            const upper = mesh(new THREE.CylinderGeometry(rForearm, rBicep, hArmTop, 12));
+            upper.position.set(side * (armOffsetX + hArmTop * 0.05), ay - hArmTop / 2, 0);
+            // Slight outward angle
+            upper.rotation.z = side * 0.08;
+            group.add(upper);
+            ay -= hArmTop;
+
+            // Forearm
+            const lower = mesh(new THREE.CylinderGeometry(rWrist * 1.1, rForearm, hArmBot, 12));
+            lower.position.set(side * (armOffsetX + hArmTop * 0.12), ay - hArmBot / 2, 0);
+            lower.rotation.z = side * 0.08;
+            group.add(lower);
+            ay -= hArmBot;
+
+            // Hand (small rounded box)
+            const handW = rWrist * 1.6;
+            const handH = cm(h * 0.062, 10.5);
+            const hand = mesh(
+                new THREE.BoxGeometry(handW * 2, handH, handW * 1.1),
+                matDark
+            );
+            hand.position.set(side * (armOffsetX + hArmTop * 0.17), ay - handH / 2, 0);
+            group.add(hand);
+        });
+
+        // Centre the whole group so it stands on y=0
+        group.position.y = -cm(h, h) / 2;
+
+        scene.add(group);
+        return group;
+    }
+
+    // ── Three.js scene setup ──────────────────────────────────────────
+    const canvas = document.getElementById('mannequin-canvas');
+    const W = canvas.clientWidth || 380;
+    const H = 480;
+    canvas.width  = W;
+    canvas.height = H;
+
+    const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
+    renderer.setPixelRatio(window.devicePixelRatio);
+    renderer.setSize(W, H);
+    renderer.shadowMap.enabled = true;
+
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x0d0d0f);
+    // Subtle fog for depth
+    scene.fog = new THREE.Fog(0x0d0d0f, 20, 60);
+
+    // Camera
+    const camera = new THREE.PerspectiveCamera(45, W / H, 0.1, 100);
+    camera.position.set(0, 7, 18);
+    camera.lookAt(0, 7, 0);
+
+    // Lighting
+    const ambient = new THREE.AmbientLight(0xffffff, 0.35);
+    scene.add(ambient);
+
+    const keyLight = new THREE.DirectionalLight(0xbb86fc, 1.1);
+    keyLight.position.set(5, 15, 8);
+    scene.add(keyLight);
+
+    const fillLight = new THREE.DirectionalLight(0x03dac6, 0.5);
+    fillLight.position.set(-6, 8, -4);
+    scene.add(fillLight);
+
+    const rimLight = new THREE.DirectionalLight(0xffffff, 0.25);
+    rimLight.position.set(0, -5, -10);
+    scene.add(rimLight);
+
+    // Ground grid
+    const grid = new THREE.GridHelper(20, 20, 0x2d2d2d, 0x1e1e1e);
+    grid.position.y = 0;
+    scene.add(grid);
+
+    // ── Load data and build first mannequin ───────────────────────────
+    let mannequinData = {};
+
+    fetch('{{ url_for("measurements.mannequin_api") }}')
+        .then(r => r.json())
+        .then(data => {
+            mannequinData = data;
+            buildMannequin(scene, data);
+            // Update height badge
+            if (data.height_cm) {
+                document.getElementById('height-display').textContent = Math.round(data.height_cm) + ' cm';
+            }
+        })
+        .catch(() => {
+            // No data yet — build with defaults so the page isn't empty
+            buildMannequin(scene, {});
+        });
+
+    // ── Orbit controls (manual — no OrbitControls import needed) ─────
+    let isDragging = false;
+    let prevX = 0, prevY = 0;
+    let rotX = 0.15, rotY = 0;
+    let targetX = 0.15, targetY = 0;
+    let zoom = 18, targetZoom = 18;
+
+    canvas.addEventListener('mousedown', e => { isDragging = true; prevX = e.clientX; prevY = e.clientY; });
+    canvas.addEventListener('mouseup',   () => { isDragging = false; });
+    canvas.addEventListener('mouseleave',() => { isDragging = false; });
+    canvas.addEventListener('mousemove', e => {
+        if (!isDragging) return;
+        targetY += (e.clientX - prevX) * 0.008;
+        targetX += (e.clientY - prevY) * 0.004;
+        targetX = Math.max(-0.5, Math.min(0.9, targetX)); // clamp vertical
+        prevX = e.clientX; prevY = e.clientY;
+    });
+    canvas.addEventListener('wheel', e => {
+        targetZoom = Math.max(8, Math.min(32, targetZoom + e.deltaY * 0.02));
+        e.preventDefault();
+    }, { passive: false });
+
+    // Touch support
+    let lastTouch = null;
+    canvas.addEventListener('touchstart', e => { lastTouch = e.touches[0]; });
+    canvas.addEventListener('touchmove', e => {
+        if (!lastTouch) return;
+        const t = e.touches[0];
+        targetY += (t.clientX - lastTouch.clientX) * 0.01;
+        targetX += (t.clientY - lastTouch.clientY) * 0.005;
+        targetX = Math.max(-0.5, Math.min(0.9, targetX));
+        lastTouch = t;
+        e.preventDefault();
+    }, { passive: false });
+
+    // ── Render loop ───────────────────────────────────────────────────
+    function animate() {
+        requestAnimationFrame(animate);
+
+        // Smooth damping
+        rotX += (targetX - rotX) * 0.08;
+        rotY += (targetY - rotY) * 0.08;
+        zoom  += (targetZoom - zoom) * 0.08;
+
+        // Orbit camera around origin
+        camera.position.x = zoom * Math.sin(rotY) * Math.cos(rotX);
+        camera.position.y = 7 + zoom * Math.sin(rotX);
+        camera.position.z = zoom * Math.cos(rotY) * Math.cos(rotX);
+        camera.lookAt(0, 7, 0);
+
+        renderer.render(scene, camera);
+    }
+    animate();
+
+    // ── Resize handler ────────────────────────────────────────────────
+    window.addEventListener('resize', () => {
+        const w = canvas.clientWidth;
+        renderer.setSize(w, H);
+        camera.aspect = w / H;
+        camera.updateProjectionMatrix();
+    });
+
+})();
 </script>
 {% endblock %}

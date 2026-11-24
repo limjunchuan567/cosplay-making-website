@@ -17,6 +17,9 @@ def create_app():
         DATABASE=os.path.join(app.instance_path, "cosplayhub.db"),
         MAX_CONTENT_LENGTH=16 * 1024 * 1024,
         ALLOWED_EXTENSIONS={"png", "jpg", "jpeg", "gif", "webp"},
+        # ── Dev flag: set True to skip login for local testing ──────────────
+        # Change to False (or ask the AI) when you want auth re-enabled.
+        DEV_BYPASS_AUTH=True,
     )
 
     os.makedirs(app.instance_path, exist_ok=True)

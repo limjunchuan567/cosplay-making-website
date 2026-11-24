@@ -7,11 +7,15 @@ Provides:
   - User logout (session cleanup).
   - g.user population for every request via before_app_request.
   - @login_required decorator to protect private routes.
+
+DEV NOTE: Set DEV_BYPASS_AUTH=True in app.py to skip login during local
+testing. A 'devuser' account is auto-created and injected as g.user.
 """
 
 import functools
 from flask import (
     Blueprint,
+    current_app,
     flash,
     g,
     redirect,
@@ -29,12 +33,30 @@ bp = Blueprint("auth", __name__, url_prefix="/auth")
 @bp.before_app_request
 def load_logged_in_user():
     """
-    Runs before every request. If a user_id is stored in the session,
-    loads the user's record from SQLite and attaches it to Flask's 'g' object.
-    Accessible in templates as 'g.user'.
-    """
-    user_id = session.get("user_id")
+    Runs before every request.
 
+    - If DEV_BYPASS_AUTH is True: auto-injects a 'devuser' account so the
+      rest of the app never sees g.user = None during local testing.
+    - Otherwise: loads the user from the Flask session as normal.
+    """
+    if current_app.config.get("DEV_BYPASS_AUTH"):
+        db = get_db()
+        dev = db.execute(
+            "SELECT id, username, email, created_at FROM users WHERE username = 'devuser'"
+        ).fetchone()
+        if dev is None:
+            db.execute(
+                "INSERT INTO users (username, email, password_hash) VALUES (?, ?, ?)",
+                ("devuser", "dev@localhost", generate_password_hash("devpass")),
+            )
+            db.commit()
+            dev = db.execute(
+                "SELECT id, username, email, created_at FROM users WHERE username = 'devuser'"
+            ).fetchone()
+        g.user = dev
+        return  # skip normal session lookup
+
+    user_id = session.get("user_id")
     if user_id is None:
         g.user = None
     else:
@@ -48,10 +70,13 @@ def load_logged_in_user():
 def login_required(view):
     """
     Decorator for views that require user authentication.
-    Redirects unauthenticated users to the login page.
+    When DEV_BYPASS_AUTH is True, skips the redirect entirely.
+    Redirects unauthenticated users to the login page otherwise.
     """
     @functools.wraps(view)
     def wrapped_view(**kwargs):
+        if current_app.config.get("DEV_BYPASS_AUTH"):
+            return view(**kwargs)
         if g.user is None:
             flash("Please log in to access this page.", "warning")
             return redirect(url_for("auth.login", next=request.path))
@@ -63,7 +88,6 @@ def login_required(view):
 @bp.route("/register", methods=("GET", "POST"))
 def register():
     """Handle new user registration."""
-    # If already logged in, redirect to dashboard or home
     if g.user:
         return redirect(url_for("index"))
 
@@ -76,7 +100,6 @@ def register():
         error = None
         db = get_db()
 
-        # Validation rules
         if not username:
             error = "Username is required."
         elif len(username) < 3:
@@ -101,14 +124,12 @@ def register():
             error = f"Email '{email}' is already registered."
 
         if error is None:
-            # Secure password hashing with Werkzeug (scrypt / pbkdf2)
             password_hash = generate_password_hash(password)
             db.execute(
                 "INSERT INTO users (username, email, password_hash) VALUES (?, ?, ?)",
                 (username, email, password_hash),
             )
             db.commit()
-
             flash("Registration successful! You can now log in.", "success")
             return redirect(url_for("auth.login"))
 
@@ -130,7 +151,6 @@ def login():
         error = None
         db = get_db()
 
-        # Allow logging in with either username or email
         user = db.execute(
             "SELECT * FROM users WHERE username = ? OR email = ?",
             (identifier, identifier.lower()),
@@ -142,13 +162,10 @@ def login():
             error = "Incorrect username/email or password."
 
         if error is None:
-            # Clear old session data and set new credentials
             session.clear()
             session["user_id"] = user["id"]
             session["username"] = user["username"]
-
             flash(f"Welcome back, {user['username']}! 🧵", "success")
-
             next_url = request.args.get("next")
             if next_url and next_url.startswith("/"):
                 return redirect(next_url)

@@ -5,9 +5,10 @@ Enables cosplayers to record accurate anatomical measurements to:
   - Estimate standard US/EU clothing sizes
   - Calculate Asian cosplay vendor sizing (Taobao, Miccostumes, DokiDoki)
   - Scale 3D armor models, helmets, and prop templates
+  - Render a parametric 3D mannequin on the measurements page
 """
 
-from flask import Blueprint, flash, g, redirect, render_template, request, url_for
+from flask import Blueprint, flash, g, jsonify, redirect, render_template, request, url_for
 from db import get_db
 from auth import login_required
 
@@ -63,7 +64,6 @@ def calculate_sizing_estimates(m):
         return None
 
     # Estimate Western Unisex / Mens / Womens sizing
-    # Based on standard chest/bust guidelines
     primary_measure = chest if chest > 0 else (waist + 15)
 
     if primary_measure < 84:
@@ -101,6 +101,40 @@ def calculate_sizing_estimates(m):
         "wig_fit": wig_fit,
         "has_data": True,
     }
+
+
+@bp.route("/api/mannequin")
+@login_required
+def mannequin_api():
+    """
+    JSON endpoint: returns the current user's measurements for the
+    Three.js parametric mannequin renderer on the measurements page.
+    """
+    ensure_table()
+    db = get_db()
+    row = db.execute(
+        "SELECT * FROM user_measurements WHERE user_id = ?", (g.user["id"],)
+    ).fetchone()
+    m = dict(row) if row else {}
+    # Return only the numeric fields the renderer needs
+    return jsonify({
+        "height_cm":               m.get("height_cm"),
+        "shoulder_width_cm":       m.get("shoulder_width_cm"),
+        "head_circumference_cm":   m.get("head_circumference_cm"),
+        "neck_circumference_cm":   m.get("neck_circumference_cm"),
+        "chest_bust_cm":           m.get("chest_bust_cm"),
+        "underbust_cm":            m.get("underbust_cm"),
+        "waist_cm":                m.get("waist_cm"),
+        "hips_cm":                 m.get("hips_cm"),
+        "torso_length_cm":         m.get("torso_length_cm"),
+        "arm_length_cm":           m.get("arm_length_cm"),
+        "bicep_circumference_cm":  m.get("bicep_circumference_cm"),
+        "wrist_circumference_cm":  m.get("wrist_circumference_cm"),
+        "inseam_cm":               m.get("inseam_cm"),
+        "outseam_cm":              m.get("outseam_cm"),
+        "thigh_circumference_cm":  m.get("thigh_circumference_cm"),
+        "calf_circumference_cm":   m.get("calf_circumference_cm"),
+    })
 
 
 @bp.route("/", methods=("GET", "POST"))
