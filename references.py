@@ -28,8 +28,42 @@ load_dotenv()
 _HERE = os.path.dirname(os.path.abspath(__file__))
 load_dotenv(os.path.join(_HERE, ".env"), override=False)
 
-# Responsive Gemini vision models in order of priority
-GEMINI_MODELS = ["gemini-3.5-flash-lite", "gemini-3.8-flash", "gemini-3.5-flash"]
+# Gemini models — tried in order. Override with GEMINI_MODEL in .env
+_DEFAULT_GEMINI_MODELS = [
+    "gemini-3.5-flash-lite",
+    "gemini-flash-latest",
+    "gemini-3.8-flash",
+    "gemini-3.6-flash",
+    "gemini-3.5-flash",
+]
+
+
+def _configured_models():
+    env = os.getenv("GEMINI_MODEL", "").strip()
+    if env:
+        return [m.strip() for m in env.split(",") if m.strip()]
+    return list(_DEFAULT_GEMINI_MODELS)
+
+
+def _discover_models(client, exclude):
+    """Ask the API which Flash models this key can actually use (last resort)."""
+    found = []
+    try:
+        for m in client.models.list():
+            name = (getattr(m, "name", "") or "").replace("models/", "")
+            actions = getattr(m, "supported_actions", None) or []
+            if "generateContent" not in actions:
+                continue
+            low = name.lower()
+            if "flash" not in low or name in exclude:
+                continue
+            if any(x in low for x in ("image", "tts", "live", "audio", "embedding", "robotics")):
+                continue
+            found.append(name)
+    except Exception as e:
+        current_app.logger.warning("Gemini model discovery failed: %s", str(e)[:200])
+    return sorted(found, reverse=True)[:3]
+
 
 bp = Blueprint("references", __name__, url_prefix="/projects/<int:project_id>/references")
 
@@ -43,7 +77,6 @@ def _own_project(project_id):
 
 
 def _get_gemini_client():
-    # Re-load env each call so the key is always picked up
     load_dotenv(os.path.join(_HERE, ".env"), override=False)
     api_key = os.getenv("GEMINI_API_KEY")
     if not api_key:
@@ -148,7 +181,6 @@ def analyze(project_id, ref_id):
 
 
 def _do_analyze(project_id, ref_id):
-    """Core analysis — separated so analyze() can wrap it in a blanket try/except."""
     project = _own_project(project_id)
     if not project:
         return jsonify({"success": False, "error": "Project not found"}), 404
@@ -173,7 +205,7 @@ def _do_analyze(project_id, ref_id):
     if not os.path.exists(image_full_path):
         return jsonify({"success": False, "error": "Image file not found on disk"}), 404
 
-    # --- Body measurements ---
+    # Fetch user body measurements
     m_row = db.execute(
         "SELECT * FROM user_measurements WHERE user_id = ?", (g.user["id"],)
     ).fetchone()
@@ -235,24 +267,31 @@ Output ONLY valid JSON — no markdown, no code fences, no commentary outside th
       "sizing_guide": "Tailored dimensions",
       "crafting_tip": "Materials and technique",
       "suggested_materials": ["Material 1", "Material 2"],
-      "blueprint": None
+      "blueprint": null
     }}
   ]
 }}
 """
 
-    # Open image using PIL for fast, reliable multimodal input
     try:
         pil_image = Image.open(image_full_path)
     except Exception as e:
         return jsonify({"success": False, "error": f"Failed to open image: {e}"}), 500
 
-    # Try each model in order until one succeeds
-    last_err = None
-    for model_name in GEMINI_MODELS:
+    # Try configured models in order
+    candidates = _configured_models()
+    tried = set()
+    errors = []
+    i = 0
+    while i < len(candidates):
+        model_name = candidates[i]
+        i += 1
+        if model_name in tried:
+            continue
+        tried.add(model_name)
+
         try:
             current_app.logger.info("Deconstructing costume with model: %s", model_name)
-            # Standard multimodal generation without response_mime_type constraint (which triggers 503)
             response = client.models.generate_content(
                 model=model_name,
                 contents=[prompt, pil_image]
@@ -262,7 +301,6 @@ Output ONLY valid JSON — no markdown, no code fences, no commentary outside th
             if not raw:
                 raise ValueError("Empty response from AI model")
 
-            # Extract JSON block even if model wraps it in markdown code fences
             if "```" in raw:
                 match = re.search(r"```(?:json)?\s*([\s\S]*?)\s*```", raw)
                 if match:
@@ -279,13 +317,13 @@ Output ONLY valid JSON — no markdown, no code fences, no commentary outside th
                 "model_used": model_name
             })
         except Exception as e:
-            last_err = e
+            errors.append(f"{model_name}: {str(e)[:100]}")
             current_app.logger.warning("Model %s failed: %s", model_name, str(e)[:200])
             continue
 
-    # If Gemini models are experiencing 503 capacity spikes or 429 free-tier daily quota limit,
-    # provide smart tailored deconstruction so the cosplayer is never blocked from working.
-    current_app.logger.warning("Gemini API unavailable (%s). Using smart tailoring deconstruction engine.", last_err)
+    # If external API is unavailable (rate-limited or capacity spike),
+    # seamlessly fall back to the built-in CosplayHub Tailoring Intelligence
+    current_app.logger.warning("All Gemini models unavailable. Using smart tailoring fallback.")
     fallback_data = _generate_smart_deconstruction(project, ref_dict, m)
     return jsonify({
         "success": True,
