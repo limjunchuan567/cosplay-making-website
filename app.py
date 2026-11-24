@@ -5,8 +5,12 @@ app.py — CosplayHub Flask application entry point.
 import os
 import secrets
 from datetime import date
+from dotenv import load_dotenv
 from flask import Flask, render_template, g
 from auth import login_required
+
+# Load environment variables from .env
+load_dotenv()
 
 
 def create_app():
@@ -46,6 +50,9 @@ def create_app():
 
     from measurements import bp as measurements_bp
     app.register_blueprint(measurements_bp)
+
+    from references import bp as references_bp
+    app.register_blueprint(references_bp)
 
     # ── Dashboard ──────────────────────────────────────────────────────────
     @app.route("/")

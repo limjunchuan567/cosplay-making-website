@@ -118,6 +118,11 @@ def view(project_id):
         (project_id,)
     ).fetchall()
 
+    references = db.execute(
+        "SELECT * FROM references_board WHERE project_id = ? ORDER BY sort_order, id",
+        (project_id,)
+    ).fetchall()
+
     # Budget summary
     budget_est = db.execute(
         """SELECT COALESCE(SUM(quantity * price_est), 0) as total
@@ -152,6 +157,7 @@ def view(project_id):
         parts=parts,
         tasks=tasks,
         materials=materials,
+        references=references,
         budget_est=budget_est,
         budget_actual=budget_actual,
         task_total=task_total,

@@ -88,6 +88,78 @@
 {% endif %}
 
 <!-- ══════════════════════════════════════════════════════════
+     CHARACTER REFERENCES & AI COSTUME DECONSTRUCTION
+══════════════════════════════════════════════════════════ -->
+<section style="margin-bottom:32px;">
+    <div class="section-header">
+        <div>
+            <h2 class="section-title">📸 Character References &amp; AI Vision Deconstruction</h2>
+            <p style="font-size:13px; color:var(--text-secondary); margin-top:2px;">
+                Upload reference art or turnaround shots. Click <strong>AI Deconstruct</strong> to automatically extract costume parts and generate tailored build measurements matched to your body profile.
+            </p>
+        </div>
+    </div>
+
+    <!-- Reference Gallery Grid -->
+    {% if references %}
+    <div class="ref-grid">
+        {% for ref in references %}
+        <div class="ref-card" id="ref-card-{{ ref.id }}">
+            <div class="ref-img-wrapper">
+                <img src="{{ url_for('static', filename=ref.image_path) }}" alt="{{ ref.caption or 'Reference image' }}">
+                <span class="ref-badge">{{ ref.category }}</span>
+            </div>
+            <div class="ref-card-body">
+                {% if ref.caption %}
+                <div class="ref-caption">{{ ref.caption }}</div>
+                {% endif %}
+                <div class="ref-actions">
+                    <button type="button" class="btn-ai-analyze" onclick="startAIAnalysis({{ ref.id }}, '{{ url_for('static', filename=ref.image_path) }}')">
+                        <span>✨ AI Deconstruct</span>
+                    </button>
+                    <form method="POST" action="{{ url_for('references.delete', project_id=project.id, ref_id=ref.id) }}"
+                          onsubmit="return confirm('Delete this reference image?');" style="margin:0;">
+                        <button type="submit" class="btn btn-sm" style="background:transparent; color:var(--text-muted); padding:6px 8px;" title="Delete image">✕</button>
+                    </form>
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    {% endif %}
+
+    <!-- Upload Reference Panel -->
+    <details class="add-panel" {% if not references %}open{% endif %}>
+        <summary>＋ Upload Character Reference Image</summary>
+        <form method="POST" action="{{ url_for('references.upload', project_id=project.id) }}" enctype="multipart/form-data" class="inline-form" style="padding:16px;">
+            <div style="display:grid; grid-template-columns: 2fr 1fr 1.5fr; gap:12px; align-items:end;">
+                <div class="form-group" style="margin-bottom:0;">
+                    <label style="font-size:12px; font-weight:600; color:var(--text-secondary); margin-bottom:6px; display:block;">Select Image *</label>
+                    <input type="file" name="reference_image" accept="image/png,image/jpeg,image/jpg,image/webp,image/gif" class="form-control" required style="padding:6px 10px;">
+                </div>
+                <div class="form-group" style="margin-bottom:0;">
+                    <label style="font-size:12px; font-weight:600; color:var(--text-secondary); margin-bottom:6px; display:block;">Angle / Type</label>
+                    <select name="category" class="form-control">
+                        <option value="turnaround">Turnaround / Full Outfit</option>
+                        <option value="detail">Close-up Detail</option>
+                        <option value="prop_blueprint">Prop Blueprint</option>
+                        <option value="color_palette">Color Palette</option>
+                        <option value="inspiration">Inspiration</option>
+                    </select>
+                </div>
+                <div class="form-group" style="margin-bottom:0;">
+                    <label style="font-size:12px; font-weight:600; color:var(--text-secondary); margin-bottom:6px; display:block;">Caption (optional)</label>
+                    <input type="text" name="caption" class="form-control" placeholder="e.g. Front 360 concept art">
+                </div>
+            </div>
+            <div style="margin-top:14px; display:flex; justify-content:flex-end;">
+                <button type="submit" class="btn btn-primary btn-sm">Upload Reference Image 📤</button>
+            </div>
+        </form>
+    </details>
+</section>
+
+<!-- ══════════════════════════════════════════════════════════
      TWO-COLUMN: Parts  |  Tasks
 ══════════════════════════════════════════════════════════ -->
 <div class="project-cols" style="margin-bottom:32px;">
@@ -139,7 +211,7 @@
 
         <!-- Add Part Form -->
         <details class="add-panel" {% if not parts %}open{% endif %}>
-            <summary>＋ Add Part</summary>
+            <summary>＋ Add Part Manually</summary>
             <form method="POST" action="{{ url_for('parts.add', project_id=project.id) }}" class="inline-form">
                 <input type="text" name="part_name" class="form-control" placeholder="Part name" required>
                 <select name="part_category" class="form-control">
@@ -192,12 +264,12 @@
         {% endfor %}
 
         {% if not tasks %}
-        <div class="mini-empty" style="margin-bottom:12px;">No tasks yet — add one below.</div>
+        <div class="mini-empty" style="margin-bottom:12px;">No tasks yet — upload a reference image to auto-generate or add one below.</div>
         {% endif %}
 
         <!-- Add Task Form -->
         <details class="add-panel" {% if not tasks %}open{% endif %}>
-            <summary>＋ Add Task</summary>
+            <summary>＋ Add Task Manually</summary>
             <form method="POST" action="{{ url_for('tasks.add', project_id=project.id) }}" class="inline-form">
                 <input type="text" name="task_title" class="form-control" placeholder="Task title" required>
                 <select name="task_part_id" class="form-control">
@@ -225,7 +297,7 @@
 ══════════════════════════════════════════════════════════ -->
 <section style="margin-bottom:32px;">
     <div class="section-header">
-        <h2 class="section-title">🛒 Materials & Budget</h2>
+        <h2 class="section-title">🛒 Materials &amp; Budget</h2>
         <span style="font-size:13px; color:var(--text-secondary);">
             {{ materials|selectattr('in_stash','equalto',0)|selectattr('status','equalto','needed')|list|length }} item(s) still needed
         </span>
@@ -289,7 +361,7 @@
 
     <!-- Add Material Form -->
     <details class="add-panel" {% if not materials %}open{% endif %}>
-        <summary>＋ Add Material</summary>
+        <summary>＋ Add Material Manually</summary>
         <form method="POST" action="{{ url_for('materials.add', project_id=project.id) }}" class="inline-form mat-form">
             <div class="mat-form-grid">
                 <div class="form-group">
@@ -363,4 +435,248 @@
         </button>
     </form>
 </section>
+
+<!-- ══════════════════════════════════════════════════════════
+     AI DECONSTRUCTION MODAL
+══════════════════════════════════════════════════════════ -->
+<div class="ai-modal-backdrop" id="aiModalBackdrop">
+    <div class="ai-modal">
+        <div class="ai-modal-header">
+            <div class="ai-modal-title">
+                <span>✨</span>
+                <span>AI Costume Deconstruction (Gemini Vision)</span>
+            </div>
+            <button type="button" class="ai-modal-close" onclick="closeAIModal()">✕</button>
+        </div>
+
+        <div class="ai-modal-body" id="aiModalBody">
+            <!-- Dynamic content injected here -->
+        </div>
+
+        <div class="ai-modal-footer" id="aiModalFooter" style="display:none;">
+            <button type="button" class="btn btn-secondary btn-sm" onclick="closeAIModal()">Cancel</button>
+            <button type="button" class="btn btn-primary btn-sm" id="btnImportParts" onclick="submitImportParts()">
+                ➕ Add Selected Parts to Project (<span id="selectedCount">0</span>)
+            </button>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+let currentDetectedParts = [];
+const projectId = {{ project.id }};
+
+function openAIModal() {
+    const backdrop = document.getElementById('aiModalBackdrop');
+    backdrop.style.display = 'flex';
+    document.body.style.overflow = 'hidden';
+}
+
+function closeAIModal() {
+    const backdrop = document.getElementById('aiModalBackdrop');
+    backdrop.style.display = 'none';
+    document.body.style.overflow = 'auto';
+}
+
+// Close modal if user clicks outside
+document.getElementById('aiModalBackdrop').addEventListener('click', function(e) {
+    if (e.target === this) closeAIModal();
+});
+
+function startAIAnalysis(refId, imageUrl) {
+    openAIModal();
+    const body = document.getElementById('aiModalBody');
+    const footer = document.getElementById('aiModalFooter');
+    footer.style.display = 'none';
+
+    body.innerHTML = `
+        <div class="ai-loading-box">
+            <div class="ai-spinner"></div>
+            <h3 style="font-size:17px; font-weight:700; color:var(--text-primary); margin-bottom:8px;">
+                Analyzing Costume with Gemini Vision...
+            </h3>
+            <p style="font-size:13px; color:var(--text-secondary); max-width:480px; margin:0 auto 16px;">
+                Deconstructing outfit subsystems, identifying craftable parts, and calculating tailored build dimensions using your personal body measurements.
+            </p>
+            <div style="font-size:11px; color:var(--accent-teal); font-weight:600; text-transform:uppercase; letter-spacing:0.5px;">
+                Powered by Gemini 3.5 Flash
+            </div>
+        </div>
+    `;
+
+    fetch(`/projects/${projectId}/references/${refId}/analyze`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-Requested-With': 'XMLHttpRequest'
+        }
+    })
+    .then(r => r.json())
+    .then(res => {
+        if (!res.success) {
+            body.innerHTML = `
+                <div style="text-align:center; padding:30px 20px;">
+                    <div style="font-size:40px; margin-bottom:12px;">⚠️</div>
+                    <h3 style="color:var(--color-error); font-size:16px; margin-bottom:8px;">Analysis Failed</h3>
+                    <p style="font-size:13px; color:var(--text-secondary); max-width:450px; margin:0 auto 16px;">
+                        ${res.error || 'Unable to analyze image. Please ensure your Gemini API key is configured.'}
+                    </p>
+                    <button class="btn btn-secondary btn-sm" onclick="closeAIModal()">Close</button>
+                </div>
+            `;
+            return;
+        }
+
+        renderAnalysisResults(res.data, res.image_url);
+    })
+    .catch(err => {
+        body.innerHTML = `
+            <div style="text-align:center; padding:30px 20px;">
+                <div style="font-size:40px; margin-bottom:12px;">⚠️</div>
+                <h3 style="color:var(--color-error); font-size:16px; margin-bottom:8px;">Network or Server Error</h3>
+                <p style="font-size:13px; color:var(--text-secondary); max-width:450px; margin:0 auto 16px;">
+                    ${err.message || 'Error communicating with server.'}
+                </p>
+                <button class="btn btn-secondary btn-sm" onclick="closeAIModal()">Close</button>
+            </div>
+        `;
+    });
+}
+
+function renderAnalysisResults(data, imageUrl) {
+    const body = document.getElementById('aiModalBody');
+    const footer = document.getElementById('aiModalFooter');
+    footer.style.display = 'flex';
+
+    currentDetectedParts = data.parts || [];
+
+    let partsHtml = '';
+    currentDetectedParts.forEach((part, idx) => {
+        const matTags = (part.suggested_materials || []).map(m => 
+            `<span style="display:inline-block; font-size:11px; background:#1c1c24; border:1px solid #2d2d3a; color:var(--text-secondary); padding:2px 8px; border-radius:12px; margin-right:4px; margin-top:4px;">${m}</span>`
+        ).join('');
+
+        partsHtml += `
+            <div class="ai-part-item">
+                <input type="checkbox" class="ai-part-checkbox" id="part_cb_${idx}" checked onchange="updateSelectedCount()">
+                <div class="ai-part-content">
+                    <div class="ai-part-title-row">
+                        <label for="part_cb_${idx}" class="ai-part-name" style="cursor:pointer;">${part.name}</label>
+                        <span class="cat-tag">${part.category}</span>
+                        ${part.anatomical_zone ? `<span class="zone-tag">📍 ${part.anatomical_zone}</span>` : ''}
+                    </div>
+                    
+                    ${part.description ? `<p style="font-size:13px; color:var(--text-secondary); margin:0 0 6px;">${part.description}</p>` : ''}
+                    
+                    ${part.sizing_guide ? `
+                        <div class="ai-sizing-callout">
+                            <strong>📏 Custom Sizing (Your Measurements):</strong> ${part.sizing_guide}
+                        </div>
+                    ` : ''}
+                    
+                    ${part.crafting_tip ? `
+                        <div class="ai-crafting-callout">
+                            <strong>✂️ Crafting &amp; Materials:</strong> ${part.crafting_tip}
+                        </div>
+                    ` : ''}
+
+                    ${matTags ? `<div style="margin-top:6px;">${matTags}</div>` : ''}
+                </div>
+            </div>
+        `;
+    });
+
+    body.innerHTML = `
+        <div style="display:flex; gap:16px; margin-bottom:20px; align-items:center; background:#101014; padding:12px 16px; border-radius:8px; border:1px solid var(--border-subtle);">
+            ${imageUrl ? `<img src="${imageUrl}" style="width:72px; height:72px; object-fit:cover; border-radius:6px; flex-shrink:0;">` : ''}
+            <div>
+                <h3 style="font-size:16px; font-weight:700; color:var(--text-primary); margin:0 0 4px;">
+                    ${data.character_name || 'Character Costume Deconstruction'}
+                </h3>
+                <p style="font-size:13px; color:var(--text-secondary); margin:0;">
+                    ${data.overview || 'Deconstructed into ' + currentDetectedParts.length + ' discrete craftable parts.'}
+                </p>
+            </div>
+        </div>
+
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+            <span style="font-size:13px; font-weight:600; color:var(--text-primary);">
+                Select parts to import into project:
+            </span>
+            <div style="font-size:12px;">
+                <a href="javascript:void(0)" onclick="toggleAllParts(true)" style="color:var(--accent-teal); margin-right:12px;">Select All</a>
+                <a href="javascript:void(0)" onclick="toggleAllParts(false)" style="color:var(--text-muted);">Deselect All</a>
+            </div>
+        </div>
+
+        <div class="ai-parts-list">
+            ${partsHtml || '<p style="color:var(--text-muted);">No parts detected.</p>'}
+        </div>
+    `;
+
+    updateSelectedCount();
+}
+
+function updateSelectedCount() {
+    let count = 0;
+    currentDetectedParts.forEach((_, idx) => {
+        const cb = document.getElementById(`part_cb_${idx}`);
+        if (cb && cb.checked) count++;
+    });
+    const badge = document.getElementById('selectedCount');
+    if (badge) badge.textContent = count;
+    const btn = document.getElementById('btnImportParts');
+    if (btn) btn.disabled = count === 0;
+}
+
+function toggleAllParts(checked) {
+    currentDetectedParts.forEach((_, idx) => {
+        const cb = document.getElementById(`part_cb_${idx}`);
+        if (cb) cb.checked = checked;
+    });
+    updateSelectedCount();
+}
+
+function submitImportParts() {
+    const selected = [];
+    currentDetectedParts.forEach((part, idx) => {
+        const cb = document.getElementById(`part_cb_${idx}`);
+        if (cb && cb.checked) {
+            selected.push(part);
+        }
+    });
+
+    if (selected.length === 0) return;
+
+    const btn = document.getElementById('btnImportParts');
+    btn.disabled = true;
+    btn.textContent = 'Importing...';
+
+    fetch(`/projects/${projectId}/references/apply_parts`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-Requested-With': 'XMLHttpRequest'
+        },
+        body: JSON.stringify({ parts: selected })
+    })
+    .then(r => r.json())
+    .then(res => {
+        if (res.success) {
+            window.location.reload();
+        } else {
+            alert('Failed to import parts: ' + (res.error || 'Unknown error'));
+            btn.disabled = false;
+            btn.textContent = 'Add Selected Parts to Project';
+        }
+    })
+    .catch(err => {
+        alert('Error: ' + err.message);
+        btn.disabled = false;
+        btn.textContent = 'Add Selected Parts to Project';
+    });
+}
+</script>
 {% endblock %}
