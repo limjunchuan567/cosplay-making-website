@@ -26,8 +26,58 @@ load_dotenv()
 _HERE = os.path.dirname(os.path.abspath(__file__))
 load_dotenv(os.path.join(_HERE, ".env"), override=False)
 
-# Gemini models — will try in order if one is overloaded
-GEMINI_MODELS = ["gemini-3.5-flash", "gemini-3.5-pro"]
+# Gemini models — tried in order. Override with GEMINI_MODEL in .env
+# (comma-separated, e.g. GEMINI_MODEL=gemini-3.6-flash,gemini-3.5-flash).
+# "gemini-flash-latest" is Google's alias that always points at the current
+# Flash model, so the app keeps working when older versions are retired.
+_DEFAULT_GEMINI_MODELS = [
+    "gemini-flash-latest",
+    "gemini-3.6-flash",
+    "gemini-3.5-flash",
+    "gemini-2.5-flash",
+]
+
+
+def _configured_models():
+    env = os.getenv("GEMINI_MODEL", "").strip()
+    if env:
+        return [m.strip() for m in env.split(",") if m.strip()]
+    return list(_DEFAULT_GEMINI_MODELS)
+
+
+def _discover_models(client, exclude):
+    """Ask the API which Flash models this key can actually use (last resort)."""
+    found = []
+    try:
+        for m in client.models.list():
+            name = (getattr(m, "name", "") or "").replace("models/", "")
+            actions = getattr(m, "supported_actions", None) or []
+            if "generateContent" not in actions:
+                continue
+            low = name.lower()
+            if "flash" not in low or name in exclude:
+                continue
+            if any(x in low for x in ("image", "tts", "live", "audio", "embedding", "robotics", "lite")):
+                continue
+            found.append(name)
+    except Exception as e:  # discovery is best-effort only
+        current_app.logger.warning("Gemini model discovery failed: %s", str(e)[:200])
+    # newest-looking names first (e.g. gemini-3.7-flash before gemini-3.5-flash)
+    return sorted(found, reverse=True)[:3]
+
+
+def _classify_error(err):
+    """Return 'auth', 'skip' (try next model) or 'other' for a Gemini SDK error."""
+    text = str(err).lower()
+    code = getattr(err, "code", None)
+    if code in (401, 403) or "api key not valid" in text or "api_key_invalid" in text \
+            or "permission_denied" in text:
+        return "auth"
+    if code in (404, 429, 500, 503) or "not found" in text or "no longer available" in text \
+            or "unavailable" in text or "overloaded" in text or "quota" in text \
+            or "resource_exhausted" in text:
+        return "skip"
+    return "other"
 
 bp = Blueprint("references", __name__, url_prefix="/projects/<int:project_id>/references")
 
@@ -248,8 +298,17 @@ Output ONLY valid JSON — no markdown, no code fences, no commentary outside th
     from google.genai import types
 
     # Try each model in order until one succeeds
-    last_err = None
-    for model_name in GEMINI_MODELS:
+    errors = []          # (model, short message) for every failed attempt
+    tried = set()
+    candidates = _configured_models()
+    discovered = False
+    i = 0
+    while i < len(candidates):
+        model_name = candidates[i]
+        i += 1
+        if model_name in tried:
+            continue
+        tried.add(model_name)
         try:
             current_app.logger.info("Trying Gemini model: %s", model_name)
             response = client.models.generate_content(
@@ -264,8 +323,11 @@ Output ONLY valid JSON — no markdown, no code fences, no commentary outside th
                 )
             )
 
+            raw = (response.text or "").strip()
+            if not raw:
+                raise ValueError("Model returned an empty response (possibly blocked by safety filters).")
+
             # Strip any accidental markdown code fences
-            raw = response.text.strip()
             if raw.startswith("```"):
                 raw = raw.split("\n", 1)[-1]
                 if raw.endswith("```"):
@@ -280,14 +342,27 @@ Output ONLY valid JSON — no markdown, no code fences, no commentary outside th
                 "model_used": model_name
             })
         except Exception as e:
-            last_err = e
-            current_app.logger.warning("Model %s failed: %s", model_name, str(e)[:200])
-            continue
+            kind = _classify_error(e)
+            msg = str(e).replace("\n", " ")[:160]
+            errors.append(f"{model_name}: {msg}")
+            current_app.logger.warning("Model %s failed (%s): %s", model_name, kind, msg)
+            if kind == "auth":
+                # A bad key fails on every model, so stop and say so clearly.
+                return jsonify({
+                    "success": False,
+                    "error": "Gemini rejected the API key (check GEMINI_API_KEY in your .env). "
+                             f"Details: {msg}"
+                }), 401
+
+        # If the whole preset list is exhausted, ask the API which models exist.
+        if i >= len(candidates) and not discovered:
+            discovered = True
+            candidates.extend(_discover_models(client, tried))
 
     # All models failed
     return jsonify({
         "success": False,
-        "error": f"All Gemini models are currently unavailable. Last error: {last_err}"
+        "error": "AI analysis failed on every Gemini model tried. " + " | ".join(errors)
     }), 503
 
 
