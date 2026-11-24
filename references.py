@@ -31,7 +31,7 @@ def _own_project(project_id):
     p = db.execute("SELECT * FROM projects WHERE id = ?", (project_id,)).fetchone()
     if p is None or p["user_id"] != g.user["id"]:
         return None
-    return p
+    return dict(p)
 
 
 def _get_gemini_client():
@@ -141,7 +141,8 @@ def analyze(project_id, ref_id):
     if not row:
         return jsonify({"success": False, "error": "Reference image not found"}), 404
 
-    image_full_path = os.path.join(current_app.static_folder, row["image_path"])
+    ref_dict = dict(row)
+    image_full_path = os.path.join(current_app.static_folder, ref_dict["image_path"])
     if not os.path.exists(image_full_path):
         return jsonify({"success": False, "error": "Image file not found on disk"}), 404
 
@@ -155,21 +156,25 @@ def analyze(project_id, ref_id):
     if m.get("height_cm"): measurements_summary.append(f"Height: {m['height_cm']}cm")
     if m.get("shoulder_width_cm"): measurements_summary.append(f"Shoulder width: {m['shoulder_width_cm']}cm")
     if m.get("head_circumference_cm"): measurements_summary.append(f"Head circumference: {m['head_circumference_cm']}cm")
+    if m.get("neck_circumference_cm"): measurements_summary.append(f"Neck: {m['neck_circumference_cm']}cm")
     if m.get("chest_bust_cm"): measurements_summary.append(f"Chest/Bust: {m['chest_bust_cm']}cm")
+    if m.get("underbust_cm"): measurements_summary.append(f"Underbust: {m['underbust_cm']}cm")
     if m.get("waist_cm"): measurements_summary.append(f"Waist: {m['waist_cm']}cm")
     if m.get("hips_cm"): measurements_summary.append(f"Hips: {m['hips_cm']}cm")
     if m.get("torso_length_cm"): measurements_summary.append(f"Torso length: {m['torso_length_cm']}cm")
     if m.get("arm_length_cm"): measurements_summary.append(f"Arm length: {m['arm_length_cm']}cm")
     if m.get("bicep_circumference_cm"): measurements_summary.append(f"Bicep: {m['bicep_circumference_cm']}cm")
+    if m.get("wrist_circumference_cm"): measurements_summary.append(f"Wrist: {m['wrist_circumference_cm']}cm")
     if m.get("inseam_cm"): measurements_summary.append(f"Inseam: {m['inseam_cm']}cm")
+    if m.get("outseam_cm"): measurements_summary.append(f"Outseam: {m['outseam_cm']}cm")
     if m.get("thigh_circumference_cm"): measurements_summary.append(f"Thigh: {m['thigh_circumference_cm']}cm")
     if m.get("calf_circumference_cm"): measurements_summary.append(f"Calf: {m['calf_circumference_cm']}cm")
 
     measurements_text = ", ".join(measurements_summary) if measurements_summary else "No body measurements recorded yet (using standard proportions)."
 
-    char_info = f"Character: {project.get('character_name') or 'Unknown'}"
-    if project.get('source_series'):
-        char_info += f" from '{project['source_series']}'"
+    char_name = project.get("character_name") or project.get("name") or "Character"
+    source = project.get("source_series") or ""
+    char_info = f"Character: {char_name}" + (f" from '{source}'" if source else "")
 
     prompt = f"""
 You are an elite, highly experienced cosplay maker, tailor, and prop designer.
@@ -209,7 +214,7 @@ Output strict JSON with this exact schema:
         image_bytes = f.read()
 
     # Determine mime type
-    ext_lower = row["image_path"].rsplit(".", 1)[-1].lower()
+    ext_lower = ref_dict["image_path"].rsplit(".", 1)[-1].lower()
     mime = "image/png" if ext_lower == "png" else "image/webp" if ext_lower == "webp" else "image/jpeg"
 
     from google.genai import types
@@ -231,7 +236,7 @@ Output strict JSON with this exact schema:
             "success": True,
             "data": parsed,
             "ref_id": ref_id,
-            "image_url": url_for("static", filename=row["image_path"])
+            "image_url": url_for("static", filename=ref_dict["image_path"])
         })
     except Exception as e:
         return jsonify({"success": False, "error": str(e)}), 500
@@ -300,7 +305,6 @@ def apply_parts(project_id):
         suggested_mats = item.get("suggested_materials", [])
         for mat_name in suggested_mats[:3]:
             if isinstance(mat_name, str) and mat_name.strip():
-                # Guess category from part category
                 mat_cat = 'fabric' if cat == 'garment' else 'foam' if cat == 'armor' else 'wig' if cat == 'wig' else 'other'
                 db.execute(
                     """INSERT INTO materials (project_id, part_id, item_name, category, quantity, unit, price_est, in_stash)

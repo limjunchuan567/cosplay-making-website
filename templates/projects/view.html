@@ -513,7 +513,14 @@ function startAIAnalysis(refId, imageUrl) {
             'X-Requested-With': 'XMLHttpRequest'
         }
     })
-    .then(r => r.json())
+    .then(async r => {
+        const contentType = r.headers.get('content-type') || '';
+        if (contentType.includes('application/json')) {
+            return r.json();
+        }
+        const text = await r.text();
+        throw new Error(text.slice(0, 200) || ('Server returned error status ' + r.status));
+    })
     .then(res => {
         if (!res.success) {
             body.innerHTML = `
