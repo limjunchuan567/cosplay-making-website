@@ -11,6 +11,7 @@ Enables cosplayers to:
 import os
 import uuid
 import json
+import traceback
 from flask import (
     Blueprint, flash, g, jsonify, redirect,
     request, url_for, current_app
@@ -20,8 +21,13 @@ from db import get_db
 from auth import login_required
 from dotenv import load_dotenv
 
-# Ensure environment variables are loaded
+# Ensure environment variables are loaded (try explicit path as well)
 load_dotenv()
+_HERE = os.path.dirname(os.path.abspath(__file__))
+load_dotenv(os.path.join(_HERE, ".env"), override=False)
+
+# Preferred Gemini model
+GEMINI_MODEL = "gemini-3.5-flash"
 
 bp = Blueprint("references", __name__, url_prefix="/projects/<int:project_id>/references")
 
@@ -35,6 +41,8 @@ def _own_project(project_id):
 
 
 def _get_gemini_client():
+    # Re-load env each call so the key is always picked up
+    load_dotenv(os.path.join(_HERE, ".env"), override=False)
     api_key = os.getenv("GEMINI_API_KEY")
     if not api_key:
         return None
@@ -46,6 +54,8 @@ def _allowed_file(filename):
     allowed = current_app.config.get("ALLOWED_EXTENSIONS", {"png", "jpg", "jpeg", "gif", "webp"})
     return "." in filename and filename.rsplit(".", 1)[1].lower() in allowed
 
+
+# ── Upload ────────────────────────────────────────────────────────────────────
 
 @bp.route("/upload", methods=("POST",))
 @login_required
@@ -76,7 +86,6 @@ def upload(project_id):
     file_path = os.path.join(upload_folder, unique_filename)
     file.save(file_path)
 
-    # Relative path stored in database
     rel_path = f"uploads/{unique_filename}"
 
     db = get_db()
@@ -90,6 +99,8 @@ def upload(project_id):
     flash("Character reference image uploaded! ✨", "success")
     return redirect(url_for("projects.view", project_id=project_id))
 
+
+# ── Delete ────────────────────────────────────────────────────────────────────
 
 @bp.route("/<int:ref_id>/delete", methods=("POST",))
 @login_required
@@ -119,9 +130,23 @@ def delete(project_id, ref_id):
     return redirect(url_for("projects.view", project_id=project_id))
 
 
+# ── AI Analysis ───────────────────────────────────────────────────────────────
+
 @bp.route("/<int:ref_id>/analyze", methods=("POST",))
 @login_required
 def analyze(project_id, ref_id):
+    """Analyze a reference image with Gemini Vision. ALWAYS returns JSON."""
+    try:
+        return _do_analyze(project_id, ref_id)
+    except Exception as e:
+        current_app.logger.error(
+            "Unhandled error in /analyze: %s\n%s", e, traceback.format_exc()
+        )
+        return jsonify({"success": False, "error": f"Server error: {e}"}), 500
+
+
+def _do_analyze(project_id, ref_id):
+    """Core analysis — separated so analyze() can wrap it in a blanket try/except."""
     project = _own_project(project_id)
     if not project:
         return jsonify({"success": False, "error": "Project not found"}), 404
@@ -130,7 +155,7 @@ def analyze(project_id, ref_id):
     if not client:
         return jsonify({
             "success": False,
-            "error": "Gemini API key is not configured in .env. Please check your setup."
+            "error": "GEMINI_API_KEY not found. Please add it to your .env file."
         }), 500
 
     db = get_db()
@@ -146,31 +171,28 @@ def analyze(project_id, ref_id):
     if not os.path.exists(image_full_path):
         return jsonify({"success": False, "error": "Image file not found on disk"}), 404
 
-    # Fetch user body measurements
+    # --- Body measurements ---
     m_row = db.execute(
         "SELECT * FROM user_measurements WHERE user_id = ?", (g.user["id"],)
     ).fetchone()
     m = dict(m_row) if m_row else {}
 
-    measurements_summary = []
-    if m.get("height_cm"): measurements_summary.append(f"Height: {m['height_cm']}cm")
-    if m.get("shoulder_width_cm"): measurements_summary.append(f"Shoulder width: {m['shoulder_width_cm']}cm")
-    if m.get("head_circumference_cm"): measurements_summary.append(f"Head circumference: {m['head_circumference_cm']}cm")
-    if m.get("neck_circumference_cm"): measurements_summary.append(f"Neck: {m['neck_circumference_cm']}cm")
-    if m.get("chest_bust_cm"): measurements_summary.append(f"Chest/Bust: {m['chest_bust_cm']}cm")
-    if m.get("underbust_cm"): measurements_summary.append(f"Underbust: {m['underbust_cm']}cm")
-    if m.get("waist_cm"): measurements_summary.append(f"Waist: {m['waist_cm']}cm")
-    if m.get("hips_cm"): measurements_summary.append(f"Hips: {m['hips_cm']}cm")
-    if m.get("torso_length_cm"): measurements_summary.append(f"Torso length: {m['torso_length_cm']}cm")
-    if m.get("arm_length_cm"): measurements_summary.append(f"Arm length: {m['arm_length_cm']}cm")
-    if m.get("bicep_circumference_cm"): measurements_summary.append(f"Bicep: {m['bicep_circumference_cm']}cm")
-    if m.get("wrist_circumference_cm"): measurements_summary.append(f"Wrist: {m['wrist_circumference_cm']}cm")
-    if m.get("inseam_cm"): measurements_summary.append(f"Inseam: {m['inseam_cm']}cm")
-    if m.get("outseam_cm"): measurements_summary.append(f"Outseam: {m['outseam_cm']}cm")
-    if m.get("thigh_circumference_cm"): measurements_summary.append(f"Thigh: {m['thigh_circumference_cm']}cm")
-    if m.get("calf_circumference_cm"): measurements_summary.append(f"Calf: {m['calf_circumference_cm']}cm")
-
-    measurements_text = ", ".join(measurements_summary) if measurements_summary else "No body measurements recorded yet (using standard proportions)."
+    mparts = []
+    for field, label in [
+        ("height_cm", "Height"), ("shoulder_width_cm", "Shoulder width"),
+        ("head_circumference_cm", "Head circumference"), ("neck_circumference_cm", "Neck"),
+        ("chest_bust_cm", "Chest/Bust"), ("underbust_cm", "Underbust"),
+        ("waist_cm", "Waist"), ("hips_cm", "Hips"),
+        ("torso_length_cm", "Torso length"), ("arm_length_cm", "Arm length"),
+        ("bicep_circumference_cm", "Bicep"), ("wrist_circumference_cm", "Wrist"),
+        ("inseam_cm", "Inseam"), ("outseam_cm", "Outseam"),
+        ("thigh_circumference_cm", "Thigh"), ("calf_circumference_cm", "Calf"),
+    ]:
+        if m.get(field):
+            mparts.append(f"{label}: {m[field]}cm")
+    measurements_text = (", ".join(mparts)
+                         if mparts
+                         else "No body measurements recorded yet (using standard proportions).")
 
     char_name = project.get("character_name") or project.get("name") or "Character"
     source = project.get("source_series") or ""
@@ -186,25 +208,32 @@ The cosplayer's recorded body measurements are:
 Deconstruct the character's complete costume into discrete, realistic, craftable parts.
 For EVERY costume piece you see (wig/hair, tops, jackets, armor pieces, trousers/skirts, gauntlets/gloves, boots/shoes, belts, props/accessories):
 
-1. Name the part concisely (e.g. "Cropped Biker Jacket", "Spiky Styled Wig", "Shoulder Pauldron Pair", "Cargo Combat Pants", "Knee-High Armored Boots").
+1. Name the part concisely (e.g. "Cropped Biker Jacket", "Spiky Styled Wig", "Shoulder Pauldron Pair").
 2. Assign the category strictly from: "wig", "garment", "armor", "prop", "footwear", "accessory", "makeup", or "other".
 3. Identify the anatomical body zone strictly from: "head", "neck", "torso", "waist", "hips", "arms", "legs", or "feet".
-4. Provide customized "sizing_guide": Calculate exact tailored cutting and fitting dimensions using the user's specific measurements above (or recommend ease / allowances). For instance: "Cut with chest circumference ~101cm (+5cm comfort ease), finish length 48cm from base of neck to waist".
-5. Provide "crafting_tip": Specific recommended materials (e.g. 5mm high-density EVA foam, faux leather, 4-way stretch spandex, Worbla, heat gun shaping) and construction method.
+4. Provide "sizing_guide": exact tailored cutting and fitting dimensions using the user's measurements above.
+5. Provide "crafting_tip": recommended materials and construction method.
+6. For category "prop" only, include a "blueprint" object with:
+   - "total_length_cm": estimated length scaled to cosplayer height
+   - "core_material": recommended structural core (e.g. "10mm PVC pipe", "EVA foam block")
+   - "build_steps": array of 4–6 step-by-step construction instructions as plain strings
+   - "con_compliance": convention safety notes (blunted edges, orange tip, length limits, etc.)
+   For all other categories, set "blueprint" to null.
 
-Output strict JSON with this exact schema:
+Output ONLY valid JSON — no markdown, no code fences, no commentary outside the JSON:
 {{
-  "character_name": "Name of character detected or confirmed",
-  "overview": "Short 1-2 sentence overview of the costume silhouette and complexity",
+  "character_name": "Name of character",
+  "overview": "1-2 sentence costume overview",
   "parts": [
     {{
       "name": "Part name",
       "category": "wig|garment|armor|prop|footwear|accessory|makeup|other",
       "anatomical_zone": "head|neck|torso|waist|hips|arms|legs|feet",
-      "description": "Visual details and features",
-      "sizing_guide": "Concrete tailored dimensions based on user's measurements",
-      "crafting_tip": "Recommended fabrics, foam density, adhesives, or techniques",
-      "suggested_materials": ["Material 1", "Material 2"]
+      "description": "Visual details",
+      "sizing_guide": "Tailored dimensions",
+      "crafting_tip": "Materials and technique",
+      "suggested_materials": ["Material 1", "Material 2"],
+      "blueprint": null
     }}
   ]
 }}
@@ -213,34 +242,40 @@ Output strict JSON with this exact schema:
     with open(image_full_path, "rb") as f:
         image_bytes = f.read()
 
-    # Determine mime type
     ext_lower = ref_dict["image_path"].rsplit(".", 1)[-1].lower()
     mime = "image/png" if ext_lower == "png" else "image/webp" if ext_lower == "webp" else "image/jpeg"
 
     from google.genai import types
 
-    try:
-        response = client.models.generate_content(
-            model="gemini-3.5-flash",
-            contents=[
-                prompt,
-                types.Part.from_bytes(data=image_bytes, mime_type=mime)
-            ],
-            config=types.GenerateContentConfig(
-                response_mime_type="application/json",
-                temperature=0.2
-            )
+    response = client.models.generate_content(
+        model=GEMINI_MODEL,
+        contents=[
+            prompt,
+            types.Part.from_bytes(data=image_bytes, mime_type=mime)
+        ],
+        config=types.GenerateContentConfig(
+            response_mime_type="application/json",
+            temperature=0.2
         )
-        parsed = json.loads(response.text)
-        return jsonify({
-            "success": True,
-            "data": parsed,
-            "ref_id": ref_id,
-            "image_url": url_for("static", filename=ref_dict["image_path"])
-        })
-    except Exception as e:
-        return jsonify({"success": False, "error": str(e)}), 500
+    )
 
+    # Strip any accidental markdown code fences
+    raw = response.text.strip()
+    if raw.startswith("```"):
+        raw = raw.split("\n", 1)[-1]
+        if raw.endswith("```"):
+            raw = raw[:-3].strip()
+
+    parsed = json.loads(raw)
+    return jsonify({
+        "success": True,
+        "data": parsed,
+        "ref_id": ref_id,
+        "image_url": url_for("static", filename=ref_dict["image_path"])
+    })
+
+
+# ── Apply (import) detected parts ─────────────────────────────────────────────
 
 @bp.route("/apply_parts", methods=("POST",))
 @login_required
@@ -257,13 +292,12 @@ def apply_parts(project_id):
 
     db = get_db()
 
-    # Get current max sort order
     max_order = db.execute(
         "SELECT COALESCE(MAX(sort_order), -1) as m FROM parts WHERE project_id = ?",
         (project_id,)
     ).fetchone()["m"]
 
-    valid_cats = {'wig', 'garment', 'armor', 'prop', 'footwear', 'accessory', 'makeup', 'electronics', 'other'}
+    valid_cats = {"wig", "garment", "armor", "prop", "footwear", "accessory", "makeup", "electronics", "other"}
 
     added_count = 0
     for idx, item in enumerate(parts_list):
@@ -277,7 +311,6 @@ def apply_parts(project_id):
 
         cur_order = max_order + 1 + idx
 
-        # Insert part
         db.execute(
             "INSERT INTO parts (project_id, name, category, sort_order) VALUES (?, ?, ?, ?)",
             (project_id, name, cat, cur_order)
@@ -285,7 +318,7 @@ def apply_parts(project_id):
         part_id = db.execute("SELECT last_insert_rowid() as id").fetchone()["id"]
         added_count += 1
 
-        # Automatically create initial task with tailoring sizing guide as task notes
+        # Build task description from sizing guide + crafting tip
         sizing_guide = item.get("sizing_guide", "")
         crafting_tip = item.get("crafting_tip", "")
         task_desc_lines = []
@@ -293,6 +326,24 @@ def apply_parts(project_id):
             task_desc_lines.append(f"📏 Sizing Guide: {sizing_guide}")
         if crafting_tip:
             task_desc_lines.append(f"✂️ Crafting Tip: {crafting_tip}")
+
+        # For props with blueprints, append step-by-step build plan
+        blueprint = item.get("blueprint")
+        if cat == "prop" and blueprint and isinstance(blueprint, dict):
+            bp_lines = ["\n🔧 PROP BLUEPRINT"]
+            if blueprint.get("total_length_cm"):
+                bp_lines.append(f"  Total length: {blueprint['total_length_cm']} cm")
+            if blueprint.get("core_material"):
+                bp_lines.append(f"  Core: {blueprint['core_material']}")
+            steps = blueprint.get("build_steps", [])
+            if steps:
+                bp_lines.append("  Build steps:")
+                for i, step in enumerate(steps, 1):
+                    bp_lines.append(f"    {i}. {step}")
+            if blueprint.get("con_compliance"):
+                bp_lines.append(f"  ⚠️ Con compliance: {blueprint['con_compliance']}")
+            task_desc_lines.append("\n".join(bp_lines))
+
         task_desc = "\n\n".join(task_desc_lines) if task_desc_lines else None
 
         db.execute(
@@ -301,16 +352,29 @@ def apply_parts(project_id):
             (project_id, part_id, f"Pattern & Build {name}", task_desc)
         )
 
-        # Optionally add suggested materials to BOM
+        # Add suggested materials to BOM (up to 3)
         suggested_mats = item.get("suggested_materials", [])
         for mat_name in suggested_mats[:3]:
             if isinstance(mat_name, str) and mat_name.strip():
-                mat_cat = 'fabric' if cat == 'garment' else 'foam' if cat == 'armor' else 'wig' if cat == 'wig' else 'other'
+                mat_cat = (
+                    "fabric" if cat == "garment"
+                    else "foam" if cat == "armor"
+                    else "wig" if cat == "wig"
+                    else "other"
+                )
                 db.execute(
                     """INSERT INTO materials (project_id, part_id, item_name, category, quantity, unit, price_est, in_stash)
                        VALUES (?, ?, ?, ?, 1.0, 'pcs', 0.0, 0)""",
                     (project_id, part_id, mat_name.strip(), mat_cat)
                 )
+
+        # For props with blueprints, add core material to BOM too
+        if cat == "prop" and blueprint and blueprint.get("core_material"):
+            db.execute(
+                """INSERT INTO materials (project_id, part_id, item_name, category, quantity, unit, price_est, in_stash)
+                   VALUES (?, ?, ?, 'other', 1.0, 'pcs', 0.0, 0)""",
+                (project_id, part_id, blueprint["core_material"])
+            )
 
     db.commit()
     return jsonify({

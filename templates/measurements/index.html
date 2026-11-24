@@ -2,17 +2,25 @@
 {% block title %}Body Measurements & Sizing Profile{% endblock %}
 
 {% block head %}
-<!-- Three.js r128 via CDN — used for the parametric 3D mannequin -->
-<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<!-- mannequin.js via ESM importmap (Three.js r170 + mannequin-js) -->
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/",
+    "mannequin": "https://cdn.jsdelivr.net/npm/mannequin-js@4.6.6/src/mannequin.js"
+  }
+}
+</script>
 <style>
 /* ── Measurements page layout ─────────────────────────────────────────────── */
 .measurements-layout {
     display: grid;
-    grid-template-columns: 1fr 380px;
+    grid-template-columns: 1fr 400px;
     gap: 28px;
     align-items: start;
 }
-@media (max-width: 1024px) {
+@media (max-width: 1100px) {
     .measurements-layout { grid-template-columns: 1fr; }
     .mannequin-panel { order: -1; }
 }
@@ -34,6 +42,7 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
+    gap: 10px;
 }
 .mannequin-header h3 {
     font-size: 14px;
@@ -50,14 +59,76 @@
     margin-top: 2px;
 }
 
-#mannequin-canvas {
+/* Toggle switch */
+.toggle-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 12px;
+    color: var(--text-secondary);
+    white-space: nowrap;
+}
+.toggle-switch {
+    position: relative;
+    width: 44px;
+    height: 24px;
+    flex-shrink: 0;
+}
+.toggle-switch input { opacity: 0; width: 0; height: 0; }
+.toggle-slider {
+    position: absolute;
+    inset: 0;
+    background: #333344;
+    border-radius: 24px;
+    cursor: pointer;
+    transition: background 0.2s;
+}
+.toggle-slider::before {
+    content: '';
+    position: absolute;
+    width: 18px; height: 18px;
+    left: 3px; top: 3px;
+    background: #aaa;
+    border-radius: 50%;
+    transition: transform 0.2s, background 0.2s;
+}
+.toggle-switch input:checked + .toggle-slider { background: rgba(3,218,198,0.3); }
+.toggle-switch input:checked + .toggle-slider::before {
+    transform: translateX(20px);
+    background: #03dac6;
+}
+
+#mannequin-scene {
     display: block;
     width: 100%;
     height: 480px;
     cursor: grab;
     background: #0d0d0f;
+    position: relative;
 }
-#mannequin-canvas:active { cursor: grabbing; }
+#mannequin-scene:active { cursor: grabbing; }
+
+/* Loading state inside scene */
+#mannequin-loading {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    color: var(--text-muted);
+    font-size: 13px;
+    gap: 10px;
+    pointer-events: none;
+}
+.load-spinner {
+    width: 32px; height: 32px;
+    border: 3px solid #2a2a3a;
+    border-top-color: #bb86fc;
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
 
 .mannequin-footer {
     padding: 10px 18px;
@@ -101,6 +172,7 @@
     font-size: 12px;
     font-weight: 600;
     padding: 2px 10px;
+    white-space: nowrap;
 }
 </style>
 {% endblock %}
@@ -312,27 +384,63 @@
             <div class="mannequin-header">
                 <div>
                     <h3>🧍 3D Body Preview</h3>
-                    <div class="mannequin-hint">Parametric mannequin — updates after saving</div>
+                    <div class="mannequin-hint">Articulated mannequin — updates after saving</div>
                 </div>
                 <span class="height-badge" id="height-display">
                     {% if m and m.height_cm %}{{ m.height_cm | int }} cm{% else %}— cm{% endif %}
                 </span>
             </div>
 
-            <canvas id="mannequin-canvas"></canvas>
+            <!-- Toggle: Body Frame ↔ Costume Fit -->
+            <div style="padding: 8px 18px; border-bottom: 1px solid var(--border-subtle); background: rgba(255,255,255,0.02);">
+                <div class="toggle-row">
+                    <span style="color: var(--text-secondary);">🧍 Body Frame</span>
+                    <label class="toggle-switch">
+                        <input type="checkbox" id="costumeToggle" onchange="setCostumeMode(this.checked)">
+                        <span class="toggle-slider"></span>
+                    </label>
+                    <span style="color: #03dac6;">👗 Costume Fit</span>
+                </div>
+            </div>
+
+            <!-- The mannequin.js scene renders into this div -->
+            <div id="mannequin-scene" style="position:relative;">
+                <div id="mannequin-loading">
+                    <div class="load-spinner"></div>
+                    <span>Loading 3D figure…</span>
+                </div>
+            </div>
 
             <div class="mannequin-footer">
-                <div class="mannequin-legend">
+                <div class="mannequin-legend" id="legend-body">
+                    <div class="legend-item">
+                        <div class="legend-dot" style="background:#c8a97a;"></div>
+                        <span>Body frame</span>
+                    </div>
                     <div class="legend-item">
                         <div class="legend-dot" style="background:#bb86fc;"></div>
-                        <span>Measured</span>
-                    </div>
-                    <div class="legend-item">
-                        <div class="legend-dot" style="background:#3a3a4a;"></div>
-                        <span>Estimated</span>
+                        <span>Joints</span>
                     </div>
                 </div>
-                <span class="mannequin-controls-hint">🖱️ Drag to rotate · Scroll to zoom</span>
+                <div class="mannequin-legend" id="legend-costume" style="display:none;">
+                    <div class="legend-item">
+                        <div class="legend-dot" style="background:#bb86fc;"></div>
+                        <span>Head/wig</span>
+                    </div>
+                    <div class="legend-item">
+                        <div class="legend-dot" style="background:#03dac6;"></div>
+                        <span>Torso</span>
+                    </div>
+                    <div class="legend-item">
+                        <div class="legend-dot" style="background:#f4c430;"></div>
+                        <span>Arms</span>
+                    </div>
+                    <div class="legend-item">
+                        <div class="legend-dot" style="background:#ff7e7e;"></div>
+                        <span>Legs/feet</span>
+                    </div>
+                </div>
+                <span class="mannequin-controls-hint">🖱️ Drag · Scroll</span>
             </div>
         </div>
     </div>
@@ -342,333 +450,269 @@
 
 {% block scripts %}
 <script>
-/* ── Unit switcher (existing) ────────────────────────────────────────── */
+/* ── Unit switcher ────────────────────────────────────────────────────── */
 let currentUnit = '{{ m.preferred_unit if m and m.preferred_unit else "cm" }}';
 
 function switchUnits(newUnit) {
     if (newUnit === currentUnit) return;
     const inputs = document.querySelectorAll('#measurementsForm input[type="number"]');
     const labels = document.querySelectorAll('.unit-label');
-    labels.forEach(label => { label.textContent = newUnit; });
-    inputs.forEach(input => {
-        if (input.value && !isNaN(input.value)) {
-            const val = parseFloat(input.value);
-            input.value = newUnit === 'in' ? (val / 2.54).toFixed(1) : (val * 2.54).toFixed(1);
+    labels.forEach(l => { l.textContent = newUnit; });
+    inputs.forEach(inp => {
+        if (inp.value && !isNaN(inp.value)) {
+            const v = parseFloat(inp.value);
+            inp.value = newUnit === 'in' ? (v / 2.54).toFixed(1) : (v * 2.54).toFixed(1);
         }
     });
     currentUnit = newUnit;
 }
+</script>
 
-/* ── Three.js parametric mannequin ──────────────────────────────────── */
-(function () {
-    const PI2 = Math.PI * 2;
+<!-- mannequin.js ESM module — must be type="module" -->
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { Male, Female, createStage } from 'mannequin';
 
-    // ── Helpers ───────────────────────────────────────────────────────
-    /** Convert circumference (cm) to radius in Three.js units (1 unit = 10 cm) */
-    function circToR(circ, fallback) {
-        return ((circ || fallback) / PI2) / 10;
-    }
-    function cm(v, fallback) { return (v || fallback) / 10; }
+// ── Helpers ───────────────────────────────────────────────────────────────
+const container = document.getElementById('mannequin-scene');
+const W = container.clientWidth || 400;
+const H = 480;
 
-    // ── Build mannequin from measurement data ─────────────────────────
-    function buildMannequin(scene, data) {
-        // Clear old mannequin group if present
-        const old = scene.getObjectByName('mannequin');
-        if (old) scene.remove(old);
+// ── Custom Three.js scene (we don't use createStage() since we embed) ────
+const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
+renderer.setPixelRatio(window.devicePixelRatio);
+renderer.setSize(W, H);
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+container.appendChild(renderer.domElement);
 
-        const group = new THREE.Group();
-        group.name = 'mannequin';
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x0d0d0f);
+scene.fog = new THREE.FogExp2(0x0d0d0f, 0.025);
 
-        const h = data.height_cm || 170;
+const camera = new THREE.PerspectiveCamera(40, W / H, 0.1, 200);
+camera.position.set(0, 65, 120);
+camera.lookAt(0, 60, 0);
 
-        // ── Derived proportions (all in cm, converted to units /10) ──
-        const headCirc   = data.head_circumference_cm  || h * 0.345;
-        const neckCirc   = data.neck_circumference_cm  || h * 0.195;
-        const chest      = data.chest_bust_cm          || h * 0.555;
-        const waist      = data.waist_cm               || h * 0.435;
-        const hips       = data.hips_cm                || h * 0.565;
-        const shoulderW  = data.shoulder_width_cm      || h * 0.259;
-        const armLen     = data.arm_length_cm          || h * 0.335;
-        const bicep      = data.bicep_circumference_cm || h * 0.167;
-        const wrist      = data.wrist_circumference_cm || h * 0.098;
-        const inseam     = data.inseam_cm              || h * 0.470;
-        const thigh      = data.thigh_circumference_cm || h * 0.330;
-        const calf       = data.calf_circumference_cm  || h * 0.213;
-        const torsoLen   = data.torso_length_cm        || h * 0.282;
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true;
+controls.dampingFactor = 0.08;
+controls.target.set(0, 60, 0);
+controls.minDistance = 40;
+controls.maxDistance = 220;
+controls.maxPolarAngle = Math.PI * 0.9;
+controls.update();
 
-        // Radii (Three.js units, 1 unit = 10 cm)
-        const rHead    = circToR(headCirc, h * 0.345);
-        const rNeck    = circToR(neckCirc, h * 0.195);
-        const rChest   = circToR(chest,   h * 0.555);
-        const rWaist   = circToR(waist,   h * 0.435);
-        const rHips    = circToR(hips,    h * 0.565);
-        const rBicep   = circToR(bicep,   h * 0.167);
-        const rWrist   = circToR(wrist,   h * 0.098);
-        const rThigh   = circToR(thigh,   h * 0.330);
-        const rCalf    = circToR(calf,    h * 0.213);
-        const rAnkle   = rCalf * 0.65;
-        const rForearm = (rBicep + rWrist) / 2;
+// Lighting — warm studio setup
+const ambient = new THREE.AmbientLight(0xfff8f0, 0.7);
+scene.add(ambient);
 
-        // Heights (Three.js units)
-        const hHead      = rHead * 1.3;          // slightly oval head
-        const hNeck      = cm(h * 0.053, 9);
-        const hTorsoTop  = cm(torsoLen * 0.55, h * 0.155); // chest to waist
-        const hTorsoBot  = cm(torsoLen * 0.45, h * 0.127); // waist to hip
-        const hLegTop    = cm(inseam * 0.55, h * 0.258);   // thigh
-        const hLegBot    = cm(inseam * 0.45, h * 0.212);   // calf
-        const hFoot      = cm(h * 0.038, 6.5);
-        const hArmTop    = cm(armLen * 0.46, h * 0.154);   // upper arm
-        const hArmBot    = cm(armLen * 0.54, h * 0.181);   // forearm
+const keyLight = new THREE.DirectionalLight(0xfff4e0, 1.4);
+keyLight.position.set(60, 140, 90);
+keyLight.castShadow = true;
+keyLight.shadow.mapSize.set(1024, 1024);
+scene.add(keyLight);
 
-        // Materials — purple for measured, dark for estimated
-        const measured = data.height_cm !== null;
-        const matBody = new THREE.MeshPhongMaterial({
-            color: measured ? 0xbb86fc : 0x444455,
-            shininess: 60,
-            specular: 0x333355,
-        });
-        const matAccent = new THREE.MeshPhongMaterial({
-            color: 0x03dac6,
-            shininess: 80,
-            specular: 0x224444,
-        });
-        const matDark = new THREE.MeshPhongMaterial({
-            color: 0x2a2a3a,
-            shininess: 30,
-        });
+const fillLight = new THREE.DirectionalLight(0xd0e8ff, 0.5);
+fillLight.position.set(-80, 80, -40);
+scene.add(fillLight);
 
-        function mesh(geo, mat) {
-            return new THREE.Mesh(geo, mat || matBody);
-        }
+const rimLight = new THREE.DirectionalLight(0xbb86fc, 0.3);
+rimLight.position.set(0, 20, -100);
+scene.add(rimLight);
 
-        // ── Coordinate system: Y=0 is floor level ─────────────────────
-        let y = cm(h, h); // start at top of head (full height up from floor)
+// Ground plane
+const groundGeo = new THREE.PlaneGeometry(400, 400);
+const groundMat = new THREE.MeshStandardMaterial({ color: 0x111118, roughness: 0.9 });
+const ground = new THREE.Mesh(groundGeo, groundMat);
+ground.rotation.x = -Math.PI / 2;
+ground.receiveShadow = true;
+scene.add(ground);
 
-        // HEAD (sphere, slightly oval)
-        const headMesh = mesh(new THREE.SphereGeometry(rHead, 20, 16));
-        headMesh.scale.y = 1.25; // oval
-        const headY = y - hHead * 0.65;
-        headMesh.position.y = headY;
-        group.add(headMesh);
-        y = headY - hHead * 0.65; // bottom of head
+// Ground grid
+const grid = new THREE.GridHelper(200, 30, 0x222230, 0x1a1a26);
+grid.position.y = 0.1;
+scene.add(grid);
 
-        // NECK
-        const neckMesh = mesh(new THREE.CylinderGeometry(rNeck, rNeck * 1.05, hNeck, 14));
-        neckMesh.position.y = y - hNeck / 2;
-        group.add(neckMesh);
-        y -= hNeck;
+// ── State ─────────────────────────────────────────────────────────────────
+let figure = null;
+let costumeMode = false;
+let measureData = {};
 
-        // SHOULDERS (a wider disc to show shoulder spread)
-        const shoulderR = cm(shoulderW, h * 0.259) / 2;
-        const shoulderH = hNeck * 0.4;
-        const shoulderMesh = mesh(
-            new THREE.CylinderGeometry(shoulderR * 0.95, shoulderR, shoulderH, 16),
-            matAccent
-        );
-        shoulderMesh.position.y = y - shoulderH / 2;
-        group.add(shoulderMesh);
-        const shoulderY = y;
-        y -= shoulderH;
+// Zone → color mapping for costume mode
+const ZONE_COLORS = {
+    head:   0xbb86fc,   // purple  — wig / helmet
+    neck:   0xd4a0f8,   // lighter purple
+    torso:  0x03dac6,   // teal    — top/jacket/armor
+    waist:  0x01c4b4,
+    hips:   0x009f94,
+    arms:   0xf4c430,   // gold    — gloves / sleeves
+    legs:   0xff7e7e,   // coral   — pants / boots
+    feet:   0xe05050,
+};
 
-        // TORSO — upper (chest → waist, tapered cylinder)
-        const torsoTopMesh = mesh(new THREE.CylinderGeometry(rWaist, rChest, hTorsoTop, 18));
-        torsoTopMesh.position.y = y - hTorsoTop / 2;
-        group.add(torsoTopMesh);
-        y -= hTorsoTop;
+// Part-name → anatomical zone map (from body→part→zone data passed from server)
+// We'll color the mannequin.js body parts based on zone
+const PART_ZONE_MAP = {
+    // mannequin.js body part names → zone key
+    head:   'head',
+    neck:   'neck',
+    torso:  'torso',
+    pelvis: 'hips',
+    l_arm:  'arms', r_arm:  'arms',
+    l_forearm: 'arms', r_forearm: 'arms',
+    l_hand: 'arms', r_hand: 'arms',
+    l_leg:  'legs', r_leg:  'legs',
+    l_shin: 'legs', r_shin: 'legs',
+    l_ankle:'feet', r_ankle:'feet',
+};
 
-        // TORSO — lower (waist → hips, tapered cylinder)
-        const torsoBottomMesh = mesh(new THREE.CylinderGeometry(rHips, rWaist, hTorsoBot, 18));
-        torsoBottomMesh.position.y = y - hTorsoBot / 2;
-        group.add(torsoBottomMesh);
-        const hipY = y - hTorsoBot; // top of legs
+// Default mannequin.js skin colors (warm wood/clay)
+const BODY_COLOR   = 0xc8a97a;
+const JOINT_COLOR  = 0xbb86fc;
 
-        // LEGS (left and right, symmetric)
-        const legOffsetX = rHips * 0.65;
-        [-1, 1].forEach(side => {
-            let ly = hipY;
-            // Upper leg (thigh)
-            const upper = mesh(new THREE.CylinderGeometry(rCalf * 0.95, rThigh, hLegTop, 14));
-            upper.position.set(side * legOffsetX, ly - hLegTop / 2, 0);
-            group.add(upper);
-            ly -= hLegTop;
+function getBodyColor() { return BODY_COLOR; }
+function getJointColor() { return JOINT_COLOR; }
 
-            // Lower leg (calf)
-            const lower = mesh(new THREE.CylinderGeometry(rAnkle, rCalf, hLegBot, 14));
-            lower.position.set(side * legOffsetX, ly - hLegBot / 2, 0);
-            group.add(lower);
-            ly -= hLegBot;
-
-            // Foot (box)
-            const footW = rAnkle * 1.4;
-            const footD = rAnkle * 3.2;
-            const foot = mesh(
-                new THREE.BoxGeometry(footW * 2, hFoot, footD),
-                matDark
-            );
-            foot.position.set(side * legOffsetX, ly - hFoot / 2, footD * 0.2);
-            group.add(foot);
-        });
-
-        // ARMS (left and right)
-        const armOffsetX = shoulderR;
-        [-1, 1].forEach(side => {
-            let ay = shoulderY;
-            // Upper arm
-            const upper = mesh(new THREE.CylinderGeometry(rForearm, rBicep, hArmTop, 12));
-            upper.position.set(side * (armOffsetX + hArmTop * 0.05), ay - hArmTop / 2, 0);
-            // Slight outward angle
-            upper.rotation.z = side * 0.08;
-            group.add(upper);
-            ay -= hArmTop;
-
-            // Forearm
-            const lower = mesh(new THREE.CylinderGeometry(rWrist * 1.1, rForearm, hArmBot, 12));
-            lower.position.set(side * (armOffsetX + hArmTop * 0.12), ay - hArmBot / 2, 0);
-            lower.rotation.z = side * 0.08;
-            group.add(lower);
-            ay -= hArmBot;
-
-            // Hand (small rounded box)
-            const handW = rWrist * 1.6;
-            const handH = cm(h * 0.062, 10.5);
-            const hand = mesh(
-                new THREE.BoxGeometry(handW * 2, handH, handW * 1.1),
-                matDark
-            );
-            hand.position.set(side * (armOffsetX + hArmTop * 0.17), ay - handH / 2, 0);
-            group.add(hand);
-        });
-
-        // Centre the whole group so it stands on y=0
-        group.position.y = -cm(h, h) / 2;
-
-        scene.add(group);
-        return group;
+// ── Build figure ──────────────────────────────────────────────────────────
+function buildFigure(data) {
+    if (figure) {
+        scene.remove(figure);
+        figure = null;
     }
 
-    // ── Three.js scene setup ──────────────────────────────────────────
-    const canvas = document.getElementById('mannequin-canvas');
-    const W = canvas.clientWidth || 380;
-    const H = 480;
-    canvas.width  = W;
-    canvas.height = H;
+    const h = data.height_cm || 170;
+    // mannequin.js height is in centimeters
+    figure = new Female(h);
+    figure.castShadow = true;
 
-    const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
-    renderer.setPixelRatio(window.devicePixelRatio);
-    renderer.setSize(W, H);
-    renderer.shadowMap.enabled = true;
+    // Apply proportional scaling from measurements
+    // mannequin.js exposes body parts as figure.body, figure.pelvis, figure.l_arm etc.
+    applyMeasurements(figure, data);
+    applyColors(figure, costumeMode);
 
-    const scene = new THREE.Scene();
-    scene.background = new THREE.Color(0x0d0d0f);
-    // Subtle fog for depth
-    scene.fog = new THREE.Fog(0x0d0d0f, 20, 60);
+    // mannequin.js positions the figure with feet at y=0
+    scene.add(figure);
 
-    // Camera
-    const camera = new THREE.PerspectiveCamera(45, W / H, 0.1, 100);
-    camera.position.set(0, 7, 18);
-    camera.lookAt(0, 7, 0);
+    // Aim camera at chest height
+    const chestH = h * 0.63;
+    controls.target.set(0, chestH, 0);
+    camera.position.set(0, chestH + 20, h * 0.9);
+    controls.update();
 
-    // Lighting
-    const ambient = new THREE.AmbientLight(0xffffff, 0.35);
-    scene.add(ambient);
+    document.getElementById('mannequin-loading').style.display = 'none';
 
-    const keyLight = new THREE.DirectionalLight(0xbb86fc, 1.1);
-    keyLight.position.set(5, 15, 8);
-    scene.add(keyLight);
+    // Update height badge
+    if (data.height_cm) {
+        document.getElementById('height-display').textContent = Math.round(data.height_cm) + ' cm';
+    }
+}
 
-    const fillLight = new THREE.DirectionalLight(0x03dac6, 0.5);
-    fillLight.position.set(-6, 8, -4);
-    scene.add(fillLight);
+function applyMeasurements(fig, data) {
+    if (!data || !data.height_cm) return;
+    const h = data.height_cm;
 
-    const rimLight = new THREE.DirectionalLight(0xffffff, 0.25);
-    rimLight.position.set(0, -5, -10);
-    scene.add(rimLight);
+    // Scale torso width from chest/waist/hips if available
+    if (data.chest_bust_cm) {
+        const chestRatio = data.chest_bust_cm / (h * 0.52);
+        if (fig.body) fig.body.scale.x = Math.max(0.7, Math.min(1.5, chestRatio));
+    }
+    if (data.waist_cm && fig.pelvis) {
+        const waistRatio = data.waist_cm / (h * 0.42);
+        fig.pelvis.scale.x = Math.max(0.7, Math.min(1.5, waistRatio));
+    }
+    // Scale arm length
+    if (data.arm_length_cm) {
+        const armRatio = data.arm_length_cm / (h * 0.33);
+        const armScale = Math.max(0.8, Math.min(1.3, armRatio));
+        if (fig.l_arm) fig.l_arm.scale.y = armScale;
+        if (fig.r_arm) fig.r_arm.scale.y = armScale;
+    }
+    // Scale leg length
+    if (data.inseam_cm) {
+        const legRatio = data.inseam_cm / (h * 0.47);
+        const legScale = Math.max(0.8, Math.min(1.3, legRatio));
+        if (fig.l_leg) fig.l_leg.scale.y = legScale;
+        if (fig.r_leg) fig.r_leg.scale.y = legScale;
+    }
+}
 
-    // Ground grid
-    const grid = new THREE.GridHelper(20, 20, 0x2d2d2d, 0x1e1e1e);
-    grid.position.y = 0;
-    scene.add(grid);
-
-    // ── Load data and build first mannequin ───────────────────────────
-    let mannequinData = {};
-
-    fetch('{{ url_for("measurements.mannequin_api") }}')
-        .then(r => r.json())
-        .then(data => {
-            mannequinData = data;
-            buildMannequin(scene, data);
-            // Update height badge
-            if (data.height_cm) {
-                document.getElementById('height-display').textContent = Math.round(data.height_cm) + ' cm';
+function applyColors(fig, costume) {
+    if (!fig) return;
+    // Traverse all meshes in the figure
+    fig.traverse(obj => {
+        if (!(obj instanceof THREE.Mesh)) return;
+        const name = obj.name || '';
+        if (costume) {
+            // Find which zone this part belongs to
+            let zoneColor = null;
+            for (const [partKey, zone] of Object.entries(PART_ZONE_MAP)) {
+                if (name.toLowerCase().includes(partKey)) {
+                    zoneColor = ZONE_COLORS[zone] || null;
+                    break;
+                }
             }
-        })
-        .catch(() => {
-            // No data yet — build with defaults so the page isn't empty
-            buildMannequin(scene, {});
-        });
-
-    // ── Orbit controls (manual — no OrbitControls import needed) ─────
-    let isDragging = false;
-    let prevX = 0, prevY = 0;
-    let rotX = 0.15, rotY = 0;
-    let targetX = 0.15, targetY = 0;
-    let zoom = 18, targetZoom = 18;
-
-    canvas.addEventListener('mousedown', e => { isDragging = true; prevX = e.clientX; prevY = e.clientY; });
-    canvas.addEventListener('mouseup',   () => { isDragging = false; });
-    canvas.addEventListener('mouseleave',() => { isDragging = false; });
-    canvas.addEventListener('mousemove', e => {
-        if (!isDragging) return;
-        targetY += (e.clientX - prevX) * 0.008;
-        targetX += (e.clientY - prevY) * 0.004;
-        targetX = Math.max(-0.5, Math.min(0.9, targetX)); // clamp vertical
-        prevX = e.clientX; prevY = e.clientY;
+            if (zoneColor !== null) {
+                obj.material = new THREE.MeshStandardMaterial({
+                    color: zoneColor,
+                    roughness: 0.4,
+                    metalness: 0.1,
+                    transparent: true,
+                    opacity: 0.85,
+                });
+            }
+        } else {
+            // Restore default mannequin.js look (wood tones)
+            const isJoint = name.toLowerCase().includes('joint') || name.toLowerCase().includes('sphere');
+            obj.material = new THREE.MeshStandardMaterial({
+                color: isJoint ? JOINT_COLOR : BODY_COLOR,
+                roughness: isJoint ? 0.3 : 0.6,
+                metalness: 0.0,
+            });
+        }
     });
-    canvas.addEventListener('wheel', e => {
-        targetZoom = Math.max(8, Math.min(32, targetZoom + e.deltaY * 0.02));
-        e.preventDefault();
-    }, { passive: false });
+}
 
-    // Touch support
-    let lastTouch = null;
-    canvas.addEventListener('touchstart', e => { lastTouch = e.touches[0]; });
-    canvas.addEventListener('touchmove', e => {
-        if (!lastTouch) return;
-        const t = e.touches[0];
-        targetY += (t.clientX - lastTouch.clientX) * 0.01;
-        targetX += (t.clientY - lastTouch.clientY) * 0.005;
-        targetX = Math.max(-0.5, Math.min(0.9, targetX));
-        lastTouch = t;
-        e.preventDefault();
-    }, { passive: false });
+// ── Costume toggle (called from inline script below) ─────────────────────
+window.setCostumeMode = function(enabled) {
+    costumeMode = enabled;
+    applyColors(figure, costumeMode);
+    document.getElementById('legend-body').style.display    = enabled ? 'none' : 'flex';
+    document.getElementById('legend-costume').style.display = enabled ? 'flex' : 'none';
+};
 
-    // ── Render loop ───────────────────────────────────────────────────
-    function animate() {
-        requestAnimationFrame(animate);
-
-        // Smooth damping
-        rotX += (targetX - rotX) * 0.08;
-        rotY += (targetY - rotY) * 0.08;
-        zoom  += (targetZoom - zoom) * 0.08;
-
-        // Orbit camera around origin
-        camera.position.x = zoom * Math.sin(rotY) * Math.cos(rotX);
-        camera.position.y = 7 + zoom * Math.sin(rotX);
-        camera.position.z = zoom * Math.cos(rotY) * Math.cos(rotX);
-        camera.lookAt(0, 7, 0);
-
-        renderer.render(scene, camera);
-    }
-    animate();
-
-    // ── Resize handler ────────────────────────────────────────────────
-    window.addEventListener('resize', () => {
-        const w = canvas.clientWidth;
-        renderer.setSize(w, H);
-        camera.aspect = w / H;
-        camera.updateProjectionMatrix();
+// ── Load measurements from API ────────────────────────────────────────────
+fetch('{{ url_for("measurements.mannequin_api") }}')
+    .then(r => r.json())
+    .then(data => {
+        measureData = data;
+        buildFigure(data);
+    })
+    .catch(() => {
+        buildFigure({});
     });
 
+// ── Render loop ────────────────────────────────────────────────────────────
+(function animate() {
+    requestAnimationFrame(animate);
+    if (figure) figure.updateWorldMatrix(false, true);
+    controls.update();
+    renderer.render(scene, camera);
 })();
+
+// ── Resize ─────────────────────────────────────────────────────────────────
+window.addEventListener('resize', () => {
+    const w = container.clientWidth;
+    renderer.setSize(w, H);
+    camera.aspect = w / H;
+    camera.updateProjectionMatrix();
+});
+</script>
+
+<script>
+/* Unit switcher is a plain script above; costume toggle bridge is here */
+/* setCostumeMode is defined in the module script and exposed on window */
 </script>
 {% endblock %}

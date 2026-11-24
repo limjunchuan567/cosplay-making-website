@@ -242,24 +242,38 @@
         {% endif %}
 
         {% for task in tasks %}
-        <div class="task-row {% if task.status=='done' %}task-done{% endif %}">
-            <div class="task-left">
-                <!-- Status toggle -->
-                <form method="POST" action="{{ url_for('tasks.toggle_status', project_id=project.id, task_id=task.id) }}" style="display:contents;">
-                    <input type="hidden" name="status" value="{% if task.status=='done' %}todo{% else %}done{% endif %}">
-                    <button type="submit" class="task-check" title="Toggle done">
-                        {% if task.status=='done' %}✅{% else %}⬜{% endif %}
-                    </button>
+        <div class="task-row {% if task.status=='done' %}task-done{% endif %}" style="flex-direction:column; align-items:stretch; gap:0;">
+            <div style="display:flex; align-items:center; justify-content:space-between; gap:8px;">
+                <div class="task-left" style="flex:1;">
+                    <!-- Status toggle -->
+                    <form method="POST" action="{{ url_for('tasks.toggle_status', project_id=project.id, task_id=task.id) }}" style="display:contents;">
+                        <input type="hidden" name="status" value="{% if task.status=='done' %}todo{% else %}done{% endif %}">
+                        <button type="submit" class="task-check" title="Toggle done">
+                            {% if task.status=='done' %}✅{% else %}⬜{% endif %}
+                        </button>
+                    </form>
+                    <span class="priority-dot priority-{{ task.priority }}" title="{{ task.priority }} priority"></span>
+                    <span class="task-title">{{ task.title }}</span>
+                    {% if task.part_name %}<span class="task-part-tag">{{ task.part_name }}</span>{% endif %}
+                    {% if task.due_date %}<span style="font-size:11px; color:var(--text-muted);">📅 {{ task.due_date }}</span>{% endif %}
+                    {% if task.description %}
+                    <span style="font-size:10px; background:rgba(3,218,198,0.1); border:1px solid rgba(3,218,198,0.25); color:#03dac6; border-radius:4px; padding:1px 6px; margin-left:4px;">📋 Notes</span>
+                    {% endif %}
+                </div>
+                <form method="POST" action="{{ url_for('tasks.delete', project_id=project.id, task_id=task.id) }}"
+                      onsubmit="return confirm('Delete task?');">
+                    <button type="submit" class="btn btn-sm" style="background:transparent; color:var(--text-muted); padding:4px 6px;">✕</button>
                 </form>
-                <span class="priority-dot priority-{{ task.priority }}" title="{{ task.priority }} priority"></span>
-                <span class="task-title">{{ task.title }}</span>
-                {% if task.part_name %}<span class="task-part-tag">{{ task.part_name }}</span>{% endif %}
-                {% if task.due_date %}<span style="font-size:11px; color:var(--text-muted);">📅 {{ task.due_date }}</span>{% endif %}
             </div>
-            <form method="POST" action="{{ url_for('tasks.delete', project_id=project.id, task_id=task.id) }}"
-                  onsubmit="return confirm('Delete task?');">
-                <button type="submit" class="btn btn-sm" style="background:transparent; color:var(--text-muted); padding:4px 6px;">✕</button>
-            </form>
+            {% if task.description %}
+            <details style="margin-top:6px; margin-left:28px;">
+                <summary style="font-size:12px; color:var(--text-secondary); cursor:pointer; list-style:none; display:flex; align-items:center; gap:5px; user-select:none;">
+                    <span style="font-size:10px; color:var(--text-muted);">▶</span>
+                    <span>Build notes &amp; blueprint</span>
+                </summary>
+                <div style="margin-top:8px; font-size:12px; color:var(--text-secondary); background:#0d0d10; border:1px solid var(--border-subtle); border-radius:6px; padding:12px 14px; white-space:pre-wrap; line-height:1.6;">{{ task.description }}</div>
+            </details>
+            {% endif %}
         </div>
         {% endfor %}
 
